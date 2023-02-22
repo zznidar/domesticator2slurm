@@ -30,9 +30,9 @@ def parse_cmd_args():
     )
     parser.add_argument(
         "--max-size-change",
-        help="Make a new group if length of amino acids between constructs changes mora than X.",
-        type=float,
-        default=1.1,
+        help="Make a new group if length of amino acids between constructs changes mora than X. Should be synced with recompile_padding",
+        type=int,
+        default=10,
     )
     #####
 
@@ -172,7 +172,7 @@ def parse_cmd_args():
     parser.add_argument("--use-dropout",
         default=False,
         action="store_true",
-        help="activate dropouts during inference to sample from uncertainity of the models",
+        help="activate dropouts during inference to sample from uncertainty of the models",
     )
     parser.add_argument("--max-seq",
         help="number of sequence clusters to use",
