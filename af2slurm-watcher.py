@@ -1,6 +1,5 @@
 #!python
-from configparser import ConfigParser
-from argparse import ArgumentParser
+from configargparse import ArgParser
 from time import sleep
 from glob import glob
 
@@ -11,38 +10,37 @@ def copy_over_fasta_file(file_name: str, in_folder: str, out_folder: str, dry_ru
 def create_slurm_submit_line(fast_file, slurm_options, colabfold_options):
     pass
 
-def move_and_submit_fasta(fasta, cf, dry_run=False):
+def move_and_submit_fasta(fasta, args, dry_run=False):
     ""
     #copy_over_fasta_file(fasta)
     pass
 
 def main():
-    parser = ArgumentParser(
-        prog="af2slurm-watcher", description="Watches a folder for fasta files and submits them to slurm"
+    parser = ArgParser(
+        prog="af2slurm-watcher", description="Watches a folder for fasta files and submits them to slurm",
+        default_config_files=['af2slurm.config']
     )
-    parser.add_argument("--config", help="Path to config file", type=str, default="af2slurm.config")
+    parser.add_argument("--config", help="Path to config file",  is_config_file=True)
     parser.add_argument(
         "--dry-run",
         help="Do not submit any jobs to slurm, but copy over fasta files and print slurm commands",
         default=False,
         action="store_true",
     )
+    parser.add_argument("--in_folder", help="Directory to watch for fasta files", default='./in')
+    parser.add_argument("--out_folder", help="Directory to write results to", default='./out')
+    parser.add_argument("--scan_interval_s", help="Scan folder every X seconds", default=60, type=int)
     args = parser.parse_args()
 
     # print(args.config)
-    cf = ConfigParser()
-    cf.read(args.config)
-    # print(cf.get("APP", "in_folder"))
 
-    scan_interval_s=cf.getint('APP', 'scan_interval_s')
-    in_folder=cf.get('APP', 'in_folder')
 
     while True:
-        fastas = sorted(glob(f'{in_folder}/*.fasta'))
+        fastas = sorted(glob(f'{args.in_folder}/*.fasta'))
         for fasta in fastas:
             print(f"Submitting file: {fasta}" )
-            move_and_submit_fasta(fasta, cf, dry_run=args.dry_run)
-        sleep(scan_interval_s)
+            move_and_submit_fasta(fasta, args, dry_run=args.dry_run)
+        sleep(args.scan_interval_s)
 
     # TODO event loop here
     # until true do scan_foders, sleep
