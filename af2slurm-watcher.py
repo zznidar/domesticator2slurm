@@ -1,5 +1,5 @@
 #!python
-from configargparse import ArgParser
+from configargparse import ArgParser, ArgumentDefaultsHelpFormatter
 from time import sleep
 from glob import glob
 
@@ -18,7 +18,8 @@ def move_and_submit_fasta(fasta, args, dry_run=False):
 def main():
     parser = ArgParser(
         prog="af2slurm-watcher", description="Watches a folder for fasta files and submits them to slurm",
-        default_config_files=['af2slurm.config']
+        default_config_files=['af2slurm.config'],
+        formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--config", help="Path to config file",  is_config_file=True)
     parser.add_argument(
