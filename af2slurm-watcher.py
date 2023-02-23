@@ -18,10 +18,9 @@ def move_and_submit_fasta(fasta, args, dry_run=False):
 def main():
     parser = ArgParser(
         prog="af2slurm-watcher", description="Watches a folder for fasta files and submits them to slurm",
-        default_config_files=['af2slurm.config'],
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--config", help="Path to config file",  is_config_file=True)
+    parser.add_argument("--config", help="Path to config file",  is_config_file=True, default='af2slurm.config')
     parser.add_argument(
         "--dry-run",
         help="Do not submit any jobs to slurm, but copy over fasta files and print slurm commands",
@@ -33,7 +32,7 @@ def main():
     parser.add_argument("--scan_interval_s", help="Scan folder every X seconds", default=60, type=int)
     args = parser.parse_args()
 
-    # print(args.config)
+    print(args)
 
 
     while True:
