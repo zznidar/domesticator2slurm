@@ -5,42 +5,41 @@ from time import sleep
 from glob import glob
 import os
 import shutil
+from pathlib import Path
 
 
 def copy_over_fasta_file(
-    file_name: str, in_folder: str, out_folder: str, dry_run: bool = False
+    file_path: str,  out_folder: str, dry_run: bool = False
 ) -> tuple[str, str]:  # dry_run is set to 0 which means the comand goes through
     """Makes a folder in the out_folder with the name of the fasta file. Copies fasta file from the in folder the new target folder.
     Returns the path to the fasta file and any first line comments, without the comment char (to be used as arguments for colabfold_batch)
     """
-    # Check if the file name ends with '.fasta'
-    if not file_name.endswith(".fasta"):
+    file_path = Path(file_path)
+    out_folder = Path(out_folder) 
+    if not file_path.suffix == '.fasta':
         raise ValueError("File name does not end with '.fasta'")
 
-    # Create input path by joining in_folder (from arguments in config file) and filename with ending .fasta
-    in_path = os.path.join(in_folder, file_name)
-    # create outpath y joining out_folder (from arguments file) and filename but without ending .fasta
-    out_path = os.path.join(out_folder, os.path.splitext(file_name)[0])
-    # if out_path doesn't exist yet make a folder in the ./out directory (out_path) and copy over the fasta file
-    if not os.path.exists(out_path):
-        os.makedirs(out_path, exist_ok=True)
-        print("creating folder")
-        if not dry_run:
-            shutil.copy(in_path, out_path)
-        # after copying the fasta into the ./out/name/ direcotry open it and read the first line
-        with open(in_path, "r") as f:
-            first_line = f.readline().strip()
-            # if the line has a first character different than '>' save it to the args variable, if the first lien starts with '>' than args variable is empty
-            if first_line[0] != ">":
-                args = first_line[1:]
-            else:
-                args = "no arguments"
+    stem_name = file_path.stem # stem is file name without extension 
+    
+    out_sub_folder = out_folder/stem_name
+    out_pathname = out_sub_folder/file_path.name 
+    os.makedirs(out_sub_folder, exist_ok=True)
+    
+    with open(file_path) as source_file:
+        #skip empty lines at the start of the file
+        lines = source_file.read()
+        lines = lines.lstrip(' \n').splitlines()
+        first_line = lines[0].strip()
+        if first_line[0] == '#': # if the first non empty char of the first line is a comment symbol
+            colab_args = first_line[1:]
+            del lines[0]
+        else:
+            colab_args = 0
+    
+    with open(out_pathname, 'w+') as target_file:
+        target_file.write("\n".join(lines))
 
-        # Return two variables args (contains first line arguments from the fasta file) and out_path ./out/file_name
-        return (args, out_path)
-    # if the path already exists returns two empty variables     !!!!optimize this part!!!!!! - idalno da preveri že na začetku kateri .fasta fili so novo ali pa da jih sproti, ko jih kopira tudi briše iz ./in folderja
-    return ("", "")
-
+    return out_pathname, colab_args
 
 def create_slurm_submit_line(file_name, slurm_options, colabfold_options):
     # name is just name of fasta file without the .fasta --> for naming
@@ -50,21 +49,23 @@ def create_slurm_submit_line(file_name, slurm_options, colabfold_options):
     return f"""sbatch  {slurm} --wrap="{colabfold_options}" """
 
 
-def move_and_submit_fasta(fasta, args, dry_run=False):
+def move_and_submit_fasta(fasta_path, args, dry_run=False):
     # fasta is a full path to a fasta file in ./in directory
-    file_name = os.path.basename(fasta)
-    first_line, out_path = copy_over_fasta_file(file_name, args.in_folder, args.out_folder)
+    file_name = os.path.basename(fasta_path)
+    first_line, out_path = copy_over_fasta_file(fasta_path, args.out_folder)
     # first line is currently not included in the AF2 command, need to check why --save_recycles gets marked as invalid flag for AF2!!!!! (ko to ugotovim - dodaj {first_line} za pythn_path in verjetno izbriši --msa-mode)
     # create a string for colabfold options NEED SOME MORE WORK
-    colabfold_options = f"source {args.env_setup_script} && {args.python_path} --msa-mode single_sequence {out_path}/{file_name} {out_path}"
-    #
-    if out_path != "":
-        submit = create_slurm_submit_line(file_name, args.slurm_args, colabfold_options)
-        subprocess.getoutput(submit)
+    colabfold_options = f"source {args.env_setup_script} && {args.python_path}  {out_path}/{file_name} {out_path}"
 
-    ""
+
+    submit = create_slurm_submit_line(file_name, args.slurm_args, colabfold_options)
+    if not dry_run:
+        subprocess.getoutput(submit)
+    else:
+        print(submit)
+
     # copy_over_fasta_file(fasta)
-    pass
+    
 
 
 def main():
