@@ -8,10 +8,10 @@ import shutil
 from pathlib import Path
 
 
-def copy_over_fasta_file(
+def move_over_fasta_file(
     file_path: str,  out_folder: str, dry_run: bool = False
 ) -> tuple[str, str, str]:  # dry_run is set to 0 which means the comand goes through
-    """Makes a folder in the out_folder with the name of the fasta file. Copies fasta file from the in folder the new target folder.
+    """Makes a file to the out folder. 
     Returns the path to the fasta file, the output folder and any first line comments, without the comment char (to be used as arguments for colabfold_batch)
     """
     file_path = Path(file_path)
@@ -39,19 +39,22 @@ def copy_over_fasta_file(
     with open(out_pathname, 'w+') as target_file:
         target_file.write("\n".join(lines))
 
+    if not dry_run:
+        os.remove(file_path)
+        
     return out_pathname, out_sub_folder, colab_args
 
 def create_slurm_submit_line(file_name, slurm_options, colabfold_options):
     # name is just name of fasta file without the .fasta --> for naming
     file_name = Path(file_name)
     # submit line is composed of: sbatch + slurm_args (config file),
-    slurm = f"{slurm_options} --job-name={file_name.stem} --output={file_name.with_suffix('.out')} -e {file_name.with_suffix('.out')} "
+    slurm = f"{slurm_options} --parsable --job-name={file_name.stem} --output={file_name.with_suffix('.out')} -e {file_name.with_suffix('.out')} "
     return f"""sbatch  {slurm} --wrap="{colabfold_options}" """
 
 
 def move_and_submit_fasta(fasta_path, args, dry_run=False):
     # fast_path is a full path to a fasta file in ./in directory
-    target_fasta, out_path_name, colabfold_arguments = copy_over_fasta_file(fasta_path, args.out_folder)
+    target_fasta, out_path_name, colabfold_arguments = move_over_fasta_file(fasta_path, args.out_folder)
 
     colabfold_command= f"source {args.env_setup_script} && {args.colabfold_path} {colabfold_arguments} {target_fasta} {out_path_name}"
 
@@ -59,7 +62,8 @@ def move_and_submit_fasta(fasta_path, args, dry_run=False):
     submit = create_slurm_submit_line(target_fasta, args.slurm_args, colabfold_command)
     print(dry_run)
     if not dry_run:
-        subprocess.getoutput(submit)
+        slurm_id = subprocess.getoutput(submit)
+        print(f"Submitted to slurm with ID {slurm_id}")
     else:
         print(submit)
 
