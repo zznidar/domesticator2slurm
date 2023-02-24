@@ -10,9 +10,9 @@ from pathlib import Path
 
 def copy_over_fasta_file(
     file_path: str,  out_folder: str, dry_run: bool = False
-) -> tuple[str, str]:  # dry_run is set to 0 which means the comand goes through
+) -> tuple[str, str, str]:  # dry_run is set to 0 which means the comand goes through
     """Makes a folder in the out_folder with the name of the fasta file. Copies fasta file from the in folder the new target folder.
-    Returns the path to the fasta file and any first line comments, without the comment char (to be used as arguments for colabfold_batch)
+    Returns the path to the fasta file, the output folder and any first line comments, without the comment char (to be used as arguments for colabfold_batch)
     """
     file_path = Path(file_path)
     out_folder = Path(out_folder) 
@@ -39,7 +39,7 @@ def copy_over_fasta_file(
     with open(out_pathname, 'w+') as target_file:
         target_file.write("\n".join(lines))
 
-    return out_pathname, colab_args
+    return out_pathname, out_sub_folder, colab_args
 
 def create_slurm_submit_line(file_name, slurm_options, colabfold_options):
     # name is just name of fasta file without the .fasta --> for naming
@@ -52,20 +52,16 @@ def create_slurm_submit_line(file_name, slurm_options, colabfold_options):
 def move_and_submit_fasta(fasta_path, args, dry_run=False):
     # fasta is a full path to a fasta file in ./in directory
     file_name = os.path.basename(fasta_path)
-    first_line, out_path = copy_over_fasta_file(fasta_path, args.out_folder)
-    # first line is currently not included in the AF2 command, need to check why --save_recycles gets marked as invalid flag for AF2!!!!! (ko to ugotovim - dodaj {first_line} za pythn_path in verjetno izbriši --msa-mode)
-    # create a string for colabfold options NEED SOME MORE WORK
-    colabfold_options = f"source {args.env_setup_script} && {args.python_path}  {out_path}/{file_name} {out_path}"
+    target_fasta, out_path_name, colabfold_arguments = copy_over_fasta_file(fasta_path, args.out_folder)
+
+    colabfold_command= f"source {args.env_setup_script} && {args.colabfold_path} {colabfold_arguments} {target_fasta} {out_path_name}"
 
 
-    submit = create_slurm_submit_line(file_name, args.slurm_args, colabfold_options)
+    submit = create_slurm_submit_line(file_name, args.slurm_args, colabfold_command)
     if not dry_run:
         subprocess.getoutput(submit)
     else:
         print(submit)
-
-    # copy_over_fasta_file(fasta)
-    
 
 
 def main():
