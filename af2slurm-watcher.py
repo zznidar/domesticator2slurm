@@ -43,21 +43,21 @@ def copy_over_fasta_file(
 
 def create_slurm_submit_line(file_name, slurm_options, colabfold_options):
     # name is just name of fasta file without the .fasta --> for naming
-    name = os.path.splitext(file_name)[0]
+    file_name = Path(file_name)
     # submit line is composed of: sbatch + slurm_args (config file),
-    slurm = f"{slurm_options} --job-name={name} --output={name}.out -e {name}.err "
+    slurm = f"{slurm_options} --job-name={file_name.stem} --output={file_name.with_suffix('.out')} -e {file_name.with_suffix('.out')} "
     return f"""sbatch  {slurm} --wrap="{colabfold_options}" """
 
 
 def move_and_submit_fasta(fasta_path, args, dry_run=False):
-    # fasta is a full path to a fasta file in ./in directory
-    file_name = os.path.basename(fasta_path)
+    # fast_path is a full path to a fasta file in ./in directory
     target_fasta, out_path_name, colabfold_arguments = copy_over_fasta_file(fasta_path, args.out_folder)
 
     colabfold_command= f"source {args.env_setup_script} && {args.colabfold_path} {colabfold_arguments} {target_fasta} {out_path_name}"
 
 
-    submit = create_slurm_submit_line(file_name, args.slurm_args, colabfold_command)
+    submit = create_slurm_submit_line(target_fasta, args.slurm_args, colabfold_command)
+    print(dry_run)
     if not dry_run:
         subprocess.getoutput(submit)
     else:
@@ -79,7 +79,7 @@ def main():
         "--dry-run",
         # dry-run: program should not actually submit any jobs to a slurm scheduler but should only print out the slurm comand that would be used to submit a job
         help="Do not submit any jobs to slurm, but copy over fasta files and print slurm commands",
-        default=True,
+        default=False,
         action="store_true",
     )
     parser.add_argument("--in_folder", help="Directory to watch for fasta files", default="./in")
