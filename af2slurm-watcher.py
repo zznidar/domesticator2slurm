@@ -9,8 +9,10 @@ import shutil
 
 def copy_over_fasta_file(
     file_name: str, in_folder: str, out_folder: str, dry_run: bool = False
-) -> tuple[str, str]:  # dry_run is seto to 0 which means the comand goes through
-    """Makes a folder in the out_foder with the name of the fasta file. Copies fasta file from the in folder the new target folder. Returns the path to the fasta file and any first line comments (to be used as arguments for colabfold_batch)"""
+) -> tuple[str, str]:  # dry_run is set to 0 which means the comand goes through
+    """Makes a folder in the out_folder with the name of the fasta file. Copies fasta file from the in folder the new target folder.
+    Returns the path to the fasta file and any first line comments, without the comment char (to be used as arguments for colabfold_batch)
+    """
     # Check if the file name ends with '.fasta'
     if not file_name.endswith(".fasta"):
         raise ValueError("File name does not end with '.fasta'")
@@ -47,14 +49,12 @@ def create_slurm_submit_line(file_name, slurm_options, colabfold_options):
     slurm = f"{slurm_options} --job-name={name} --output={name}.out -e {name}.err "
     return f"""sbatch  {slurm} --wrap="{colabfold_options}" """
 
-    pass
-
 
 def move_and_submit_fasta(fasta, args, dry_run=False):
     # fasta is a full path to a fasta file in ./in directory
     file_name = os.path.basename(fasta)
     first_line, out_path = copy_over_fasta_file(file_name, args.in_folder, args.out_folder)
-    # first line is currently not included in the AF2 comand, need to check why --save_recycles gets marked as invalid flag for AF2!!!!! (ko to ugotovim - dodaj {first_line} za pythn_path in verjetno izbriši --msa-mode)
+    # first line is currently not included in the AF2 command, need to check why --save_recycles gets marked as invalid flag for AF2!!!!! (ko to ugotovim - dodaj {first_line} za pythn_path in verjetno izbriši --msa-mode)
     # create a string for colabfold options NEED SOME MORE WORK
     colabfold_options = f"source {args.env_setup_script} && {args.python_path} --msa-mode single_sequence {out_path}/{file_name} {out_path}"
     #
@@ -97,18 +97,17 @@ def main():
 
     # print(args)
 
-    for i in range(3):
-        # while True:
+    while True:
         # inf loop in which it scans the input directory for new fasta files and calls one of the functions from above - move and submit fasta
         # moves files to the output folder and submit them to slurm
         fastas = sorted(glob(f"{args.in_folder}/*.fasta"))
         for fasta in fastas:
             print(f"Submitting file: {fasta}")
             move_and_submit_fasta(fasta, args, dry_run=args.dry_run)
-        sleep(args.scan_interval_s)  # continous scanning of the input foldrer for fasta files
-
-    # TODO event loop here
-    # until true do scan_foders, sleep
+        if args.dry_run:
+            # only execute loop once if we are doing a dry run
+            break
+        sleep(args.scan_interval_s)  # continuous scanning of the input folder for fasta files
 
 
 if __name__ == "__main__":
