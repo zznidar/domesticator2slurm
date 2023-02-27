@@ -224,6 +224,57 @@ def parse_cmd_args():
     args = parser.parse_args()
     return args
 
+"""
+default parameters:
+python af2slurm-parallel.py <path/to/fasta/file> <output/directory> \
+
+    --dry-run False \
+
+    ### Control grouping ###
+    --max-group-size 30 \
+    --max-group-size-AA 10000 \
+    --max-size-change 10 \
+
+    ### Slurm controls ###
+    --job-name "" \
+    --output "" \
+    --partition gpu \
+    --gres gpu:A40:1 \
+    --cpus-per-task 2 \
+
+    ### Colabfold batch settings ###
+    --stop-at-score 100 \
+    --num-recycle None \
+    --recycle-early-stop-tolerance None \
+    --num-ensemble 1 \
+    --num-seeds 1 \
+    --random-seed 0 \
+    --num-models 5 \
+    --recompile-padding 10 \
+    --model-order 1,2,3,4,5 \
+    --msa-mode mmseqs2_uniref_env \
+    --model-type auto \
+    --amber False \
+    --num-relax 0 \
+    --templates False \
+    --custom-template-path None \
+    --rank auto \
+    --pair-mode unpaired_paired \
+    --sort-queries-by length \
+    --save-single-representations False \
+    --save-pair-representations False \
+    --use-dropout False \
+    --max-seq None \
+    --max-extra-seq None \
+    --max-msa None \
+    --disable-cluster-profile False \
+    --zip False \
+    --use-gpu-relax False \
+    --save-all False \
+    --save-recycles False \
+    --overwrite-existing-results False \
+    --disable-unified-memory False
+"""
 
 def main():
     args = parse_cmd_args()
