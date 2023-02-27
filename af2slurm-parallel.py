@@ -302,8 +302,8 @@ def main():
     
     # Main arguments
     out_dir = args.out_dir
-    fasta_file = args.fasta_file
-    job_name = args.job_name
+    fasta_file = args.fasta
+
     # Set maximum group size, total amino acid count, and size change for clustering sequences
     MAX_GROUP_SIZE = args.max_group_size #--max-group-size 30 {args.save_recycles}
     MAX_GROUP_TOTAL_AA = args.max_group_size_AA #--max-group-size-AA
@@ -406,18 +406,13 @@ def main():
     cmds = u.read_file_lines(f'{out_dir}/run.tasks', trim=True)
     #line 1 - '. /home/aljubetic/bin/set_up_AF2.sh && mkdir -p out/01__extra800/g0000 && /home/aljubetic/AF2/CF2/bin/colabfold_batch --num-recycle 6 --msa-mode single_sequence --model-type AlphaFold2-multimer-v2 out/01__extra800/g0000.fasta out/01__extra800/g0000'
 
-    ### Slurm controls ###
-    #--job-name "" \
-    #--output "" \
-    #--partition gpu \
-    #--gres gpu:A40:1 \
-    #--cpus-per-task 2 \
-
-
     # Prepare params for the jobs
-    slurm_params =  f'--partition=gpu --gres=gpu:A40:1 --ntasks=1 ' \
-                    f' --cpus-per-task=2 --job-name={job_name} ' \
-                    f'--output={job_name}.out -e {job_name}.err '
+    job_name = args.job_name if args.job_name else fasta_file
+    output_file = args.output if args.output else f"{fasta_name}.out"
+    slurm_params =  f'--partition={args.partition} --gres={args.gres} --ntasks=1 ' \
+                    f'--cpus-per-task={args.cpus_per_task} --job-name={job_name} ' \
+                    f'--output={output_file} -e {job_name}.err '
+
     
     task_list = f'{out_dir}/run.tasks'
     num_tasks = ceil(len(cmds)/GROUP_SIZE)
