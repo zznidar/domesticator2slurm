@@ -34,7 +34,7 @@ def move_over_fasta_file(
             colab_args = first_line[1:]
             del lines[0]
         else:
-            colab_args = 0
+            colab_args = ''
     
     with open(out_pathname, 'w+') as target_file:
         target_file.write("\n".join(lines))
@@ -57,7 +57,6 @@ def move_and_submit_fasta(fasta_path, args, dry_run=False):
     target_fasta, out_path_name, colabfold_arguments = move_over_fasta_file(fasta_path, args.out_folder)
 
     colabfold_command= f"source {args.env_setup_script} && {args.colabfold_path} {colabfold_arguments} {target_fasta} {out_path_name}"
-
 
     submit = create_slurm_submit_line(target_fasta, args.slurm_args, colabfold_command)
     print(dry_run)
