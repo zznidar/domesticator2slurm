@@ -1,5 +1,12 @@
 #!python
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+import os
+import socket
+from glob import glob
+import pathlib
+from Bio import SeqIO
+import truncator as u
+from math import ceil
 
 
 def parse_cmd_args():
@@ -38,7 +45,7 @@ def parse_cmd_args():
 
     ### Control slurm
     parser.add_argument(
-        "--job-name", help="Slurm job name. If empty defaults to fasta name", type=str, default=""
+        "--job-name", help="Slurm job name. If empty defaults to fasta name", type=str, default="af2slurm-parallel"
     )
     parser.add_argument(
         "--output",
@@ -276,10 +283,155 @@ python af2slurm-parallel.py <path/to/fasta/file> <output/directory> \
     --disable-unified-memory False
 """
 
+# Define a function to write a list of sequences to a FASTA file
+def write_to_fasta(name, list_of_seq):
+    with open(name, 'w') as out_file:
+        for seq in list_of_seq:
+            out_file.write(f'>{seq.id}\n')
+            out_file.write(f'{seq.seq}\n')
+
+# Define a function to parse the description line of a FASTA record
+def parse_fasta_description(desc):
+    parts = [p.strip() for p in desc.split(',')]
+    data = {k.strip(): v.strip() for k, v in [p.split('=') for p in parts]}
+    return data
+
+
 def main():
     args = parse_cmd_args()
-    print(args)
+    
+    # Main arguments
+    out_dir = args.out_dir
+    fasta_file = args.fasta_file
+    job_name = args.job_name
+    # Set maximum group size, total amino acid count, and size change for clustering sequences
+    MAX_GROUP_SIZE = args.max_group_size #--max-group-size 30 {args.save_recycles}
+    MAX_GROUP_TOTAL_AA = args.max_group_size_AA #--max-group-size-AA
+    MAX_SIZE_CHANGE = args.max_size_change #--max-size-change
+    GROUPS = []
 
+    # Read in a list of sequences from a FASTA file and sort them by score
+    seqs = list(SeqIO.parse(open(fasta_file), 'fasta'))
+    seqs = sorted(seqs, key=lambda seq: float(parse_fasta_description(seq.description)['score']))
+
+    # Take the top 1000 sequences and the native sequence
+    first = seqs[0]
+    seqs = [first] + seqs[:1000]
+
+    # Write the selected sequences to a new FASTA file with modified IDs
+    with open(f'{job_name}.fasta', 'w') as out_file:
+        for seq in seqs:
+            info = parse_fasta_description(seq.description)
+            new_id = f"{info['sample']}|{info['score']} {info['T']} {info['global_score']}"
+            seq = str(seq.seq).replace(' ','').replace('-','').replace('/',':')
+            out_file.write(f'>{new_id}\n')
+            out_file.write(f'{seq}\n')
+    
+    # Read in a list of sequences from the new FASTA file
+    seq_list = list(SeqIO.parse(open(f'{job_name}.fasta'), 'fasta'))
+
+    # Initialize a new group with the first sequence
+    seq = seq_list[0]
+    group_index = 0
+    GROUPS.append([seq])
+    group_size = 1
+    group_total_AA = len(seq)
+    last_added_length = len(seq)
+
+    # Iterate over the remaining sequences and cluster them into groups
+    for seq in seq_list[1:]:
+        # If there is a change in criteria, create a new group
+        size_change = len(seq) / last_added_length
+        if group_size > MAX_GROUP_SIZE or group_total_AA > MAX_GROUP_TOTAL_AA or size_change > MAX_SIZE_CHANGE:
+            group_index += 1
+            GROUPS.append([seq])
+            group_size = 1
+            group_total_AA = len(seq)
+            last_added_length = len(seq)
+        else:
+            GROUPS[group_index].append(seq)
+            group_size += 1
+            group_total_AA += len(seq)
+            last_added_length = len(seq)
+    
+    # Create the output directory if it doesn't exist
+    os.makedirs(out_dir, exist_ok=True)
+
+    #Write each group to a separate file and generate commands to run the ColabFold program on each file
+    for n, g in enumerate(GROUPS):
+        write_to_fasta(out_dir / f"g{n:04d}.fasta", g)
+
+    fastas = sorted(glob(f'{out_dir}/*.fasta'))
+
+    #Create a file to store the commands
+    print(f'{out_dir}/run.tasks')
+    with open(f'{out_dir}/run.tasks', 'w') as f:
+        for fasta in fastas:
+            fasta_name = u.basename_noext(fasta)
+            f.write(f'. /home/aljubetic/bin/set_up_AF2.sh && mkdir -p {out_dir / fasta_name} && ' \
+                f'/home/aljubetic/AF2/CF2/bin/colabfold_batch ' \
+                f'--stop-at-score {args.stop_at_score} ' \
+                f'--num-recycle {args.num_recycle} ' \
+                f'--recycle-early-stop-tolerance {args.recycle_early_stop_tolerance} ' \
+                f'--num-ensemble {args.num_ensemble} ' \
+                f'--num-seeds {args.num_seeds} ' \
+                f'--random-seed {args.random_seed} ' \
+                f'--num-models {args.num_models} ' \
+                f'--recompile-padding {args.recompile_padding} ' \
+                f'--model-order {args.model_order} ' \
+                f'--msa-mode {args.msa_mode} ' \
+                f'--model-type {args.model_type} ' \
+                f'--amber {args.amber} ' \
+                f'--num-relax {args.num_relax} ' \
+                f'--templates {args.templates} ' \
+                f'--custom-template-path {args.custom_template_path} ' \
+                f'--rank {args.rank} ' \
+                f'--pair-mode {args.pair_mode} ' \
+                f'--sort-queries-by {args.sort_queries_by} ' \
+                f'--save-single-representations {args.save_single_representations} ' \
+                f'--save-pair-representations {args.save_pair_representations} ' \
+                f'--use-dropout {args.use_dropout} ' \
+                f'--max-seq {args.max_seq} ' \
+                f'--max-extra-seq {args.max_extra_seq} ' \
+                f'--max-msa {args.max_msa} ' \
+                f'--disable-cluster-profile {args.disable_cluster_profile} ' \
+                f'--zip {args.zip} ' \
+                f'--use-gpu-relax {args.use_gpu_relax} ' \
+                f'--save-all {args.save_all} ' \
+                f'--save-recycles {args.save_recycles} ' \
+                f'--overwrite-existing-results {args.overwrite_existing_results} ' \
+                f'--disable-unified-memory {args.disable_unified_memory} ')
+
+    #Read the commands from the file
+    cmds = u.read_file_lines(f'{out_dir}/run.tasks', trim=True)
+    #line 1 - '. /home/aljubetic/bin/set_up_AF2.sh && mkdir -p out/01__extra800/g0000 && /home/aljubetic/AF2/CF2/bin/colabfold_batch --num-recycle 6 --msa-mode single_sequence --model-type AlphaFold2-multimer-v2 out/01__extra800/g0000.fasta out/01__extra800/g0000'
+
+    ### Slurm controls ###
+    #--job-name "" \
+    #--output "" \
+    #--partition gpu \
+    #--gres gpu:A40:1 \
+    #--cpus-per-task 2 \
+
+
+    # Prepare params for the jobs
+    slurm_params =  f'--partition=gpu --gres=gpu:A40:1 --ntasks=1 ' \
+                    f' --cpus-per-task=2 --job-name={job_name} ' \
+                    f'--output={job_name}.out -e {job_name}.err '
+    
+    task_list = f'{out_dir}/run.tasks'
+    num_tasks = ceil(len(cmds)/GROUP_SIZE)
+    
+    #Submit
+    dry_run = args.dry_run
+    
+    if dry_run:
+        print(f"export GROUP_SIZE={group_size}; sbatch {slurm_params} -a 1-{num_tasks} /home/aljubetic/scripts/wrapper_slurm_array_job_group.sh {task_list}")
+    else:
+        os.system(f"export GROUP_SIZE={group_size}; sbatch {slurm_params} -a 1-{num_tasks} /home/aljubetic/scripts/wrapper_slurm_array_job_group.sh {task_list}")
+
+    # Check the status of the jobs
+    os.system("squeue --me")
 
 if __name__ == "__main__":
     main()
