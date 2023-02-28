@@ -3,9 +3,8 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import os
 import socket
 from glob import glob
-import pathlib
+from pathlib import Path
 from Bio import SeqIO
-import truncator as u
 from math import ceil
 
 
@@ -71,7 +70,7 @@ def parse_cmd_args():
         help="Number of prediction recycles."
         "Increasing recycles can improve the quality but slows down the prediction.",
         type=int,
-        default=None,
+        default=6,
     )
     parser.add_argument("--recycle-early-stop-tolerance",
         help="Specify convergence criteria."
@@ -301,8 +300,9 @@ def main():
     args = parse_cmd_args()
     
     # Main arguments
-    out_dir = args.out_dir
+    out_dir = Path(args.out_dir)
     fasta_file = args.fasta
+    job_name = args.job_name if args.job_name else fasta_file
 
     # Set maximum group size, total amino acid count, and size change for clustering sequences
     MAX_GROUP_SIZE = args.max_group_size #--max-group-size 30 {args.save_recycles}
@@ -367,7 +367,7 @@ def main():
     print(f'{out_dir}/run.tasks')
     with open(f'{out_dir}/run.tasks', 'w') as f:
         for fasta in fastas:
-            fasta_name = u.basename_noext(fasta)
+            fasta_name = Path(fasta).stem
             f.write(f'. /home/aljubetic/bin/set_up_AF2.sh && mkdir -p {out_dir / fasta_name} && ' \
                 f'/home/aljubetic/AF2/CF2/bin/colabfold_batch ' \
                 f'--stop-at-score {args.stop_at_score} ' \
@@ -400,22 +400,24 @@ def main():
                 f'--save-all {args.save_all} ' \
                 f'--save-recycles {args.save_recycles} ' \
                 f'--overwrite-existing-results {args.overwrite_existing_results} ' \
-                f'--disable-unified-memory {args.disable_unified_memory} ')
+                f'--disable-unified-memory {args.disable_unified_memory}\n')
 
     #Read the commands from the file
-    cmds = u.read_file_lines(f'{out_dir}/run.tasks', trim=True)
-    #line 1 - '. /home/aljubetic/bin/set_up_AF2.sh && mkdir -p out/01__extra800/g0000 && /home/aljubetic/AF2/CF2/bin/colabfold_batch --num-recycle 6 --msa-mode single_sequence --model-type AlphaFold2-multimer-v2 out/01__extra800/g0000.fasta out/01__extra800/g0000'
-
+    with open(f'{out_dir}/run.tasks') as cmds:
+        lines = cmds.read()
+        lines = lines.split('\n')
+    
     # Prepare params for the jobs
     job_name = args.job_name if args.job_name else fasta_file
     output_file = args.output if args.output else f"{fasta_name}.out"
     slurm_params =  f'--partition={args.partition} --gres={args.gres} --ntasks=1 ' \
-                    f'--cpus-per-task={args.cpus_per_task} --job-name={job_name} ' \
+                    f'--cpus-per-task={args.cpus_per_task} --job-name={out_dir}/{job_name} ' \
                     f'--output={output_file} -e {job_name}.err '
 
-    
+    GROUP_SIZE=1
     task_list = f'{out_dir}/run.tasks'
-    num_tasks = ceil(len(cmds)/GROUP_SIZE)
+    num_tasks = ceil(len(lines)/GROUP_SIZE)
+    print(num_tasks)
     
     #Submit
     dry_run = args.dry_run
@@ -425,8 +427,6 @@ def main():
     else:
         os.system(f"export GROUP_SIZE={group_size}; sbatch {slurm_params} -a 1-{num_tasks} /home/aljubetic/scripts/wrapper_slurm_array_job_group.sh {task_list}")
 
-    # Check the status of the jobs
-    os.system("squeue --me")
 
 if __name__ == "__main__":
     main()
