@@ -45,7 +45,6 @@ def move_over_fasta_file(
     return out_pathname, out_sub_folder, colab_args
 
 def create_slurm_submit_line(file_name, slurm_options, colabfold_options):
-    # name is just name of fasta file without the .fasta --> for naming
     file_name = Path(file_name)
     # submit line is composed of: sbatch + slurm_args (config file),
     slurm = f"{slurm_options} --parsable --job-name={file_name.stem} --output={file_name.with_suffix('.out')} -e {file_name.with_suffix('.out')} "
@@ -76,8 +75,6 @@ def main():
     parser.add_argument(
         "--config", help="Path to config file", is_config_file=True, default="af2slurm.config"
     )
-    # config arument specifies path to a configuration file which will be used to set program options
-    # is_config_file =True this isn't command line argument(?)
     parser.add_argument(
         "--dry-run",
         # dry-run: program should not actually submit any jobs to a slurm scheduler but should only print out the slurm comand that would be used to submit a job
@@ -88,17 +85,12 @@ def main():
     parser.add_argument("--in_folder", help="Directory to watch for fasta files", default="./in")
     parser.add_argument("--out_folder", help="Directory to write results to", default="./out")
     parser.add_argument("--scan_interval_s", help="Scan folder every X seconds", default=60, type=int)
-    parser.add_argument("--python_path")
-    parser.add_argument("--colabfold_path")
-    parser.add_argument("--slurm_args")
-    parser.add_argument("--env_setup_script")
+    parser.add_argument("--colabfold_path", help='find path to the colabfold', default='/home/aljubetic/AF2/CF2.3/colabfold-conda/bin/colabfold_batch ')
+    parser.add_argument("--slurm_args", help='arguments for slurm', default='--partition=gpu --gres=gpu:A40:1 --ntasks=1 --cpus-per-task=2')
+    parser.add_argument("--env_setup_script", help = 'python environment that has AF2 setup', default='/home/aljubetic/bin/set_up_AF2.3.sh')
     args = parser.parse_args()
-    # pars_args( method is called on the argument parser 'parser' to actually parse the command-line arguments and populate args variable with the values specified )
-
-    # print(args)
 
     while True:
-        # inf loop in which it scans the input directory for new fasta files and calls one of the functions from above - move and submit fasta
         # moves files to the output folder and submit them to slurm
         fastas = sorted(glob(f"{args.in_folder}/*.fasta"))
         for fasta in fastas:
