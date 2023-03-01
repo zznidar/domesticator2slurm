@@ -61,7 +61,7 @@ def move_and_submit_fasta(fasta_path, args, dry_run=False):
     colabfold_command= f"source {args.env_setup_script} && {args.colabfold_path} {colabfold_arguments} {target_fasta} {out_path_name}"
 
     submit = create_slurm_submit_line(target_fasta, args.slurm_args, colabfold_command)
-    print(dry_run)
+
     if not dry_run:
         slurm_id = subprocess.getoutput(submit)
         print(f"Submitted to slurm with ID {slurm_id}")
@@ -92,6 +92,8 @@ def main():
     parser.add_argument("--slurm_args", help='arguments for slurm', default='--partition=gpu --gres=gpu:A40:1 --ntasks=1 --cpus-per-task=2')
     parser.add_argument("--env_setup_script", help = 'python environment that has AF2 setup', default='/home/aljubetic/bin/set_up_AF2.3.sh')
     args = parser.parse_args()
+
+    print("Running af2slurm watcher with arguments: "+str(args))
 
     while True:
         # moves files to the output folder and submit them to slurm
