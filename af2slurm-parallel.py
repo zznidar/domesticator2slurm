@@ -422,10 +422,12 @@ def main():
     #Submit
     dry_run = args.dry_run
     
+
+    cmd_string = f"export GROUP_SIZE=1; sbatch {slurm_params} -a 1-{num_tasks} /home/aljubetic/scripts/wrapper_slurm_array_job_group.sh {task_list}"
     if dry_run:
-        print(f"export GROUP_SIZE={group_size}; sbatch {slurm_params} -a 1-{num_tasks} /home/aljubetic/scripts/wrapper_slurm_array_job_group.sh {task_list}")
+        print(cmd_string)
     else:
-        os.system(f"export GROUP_SIZE={group_size}; sbatch {slurm_params} -a 1-{num_tasks} /home/aljubetic/scripts/wrapper_slurm_array_job_group.sh {task_list}")
+        os.system(cmd_string)
 
 
 if __name__ == "__main__":
