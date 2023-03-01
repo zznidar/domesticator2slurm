@@ -36,6 +36,9 @@ def move_over_fasta_file(
         else:
             colab_args = ''
     
+    # Remove possible (*)
+    lines = [l.replace('*','') for l in lines]
+    
     with open(out_pathname, 'w+') as target_file:
         target_file.write("\n".join(lines))
 
