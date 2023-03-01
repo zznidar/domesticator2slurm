@@ -130,4 +130,5 @@ dmypy.json
 .vscode
 out/
 help_scripts
+af2slurm.config
 
