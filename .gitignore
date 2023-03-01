@@ -128,5 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .vscode
-help_scripts/02_run.py
-help_scripts/01_run_parallel_fasta.ipynb
+out/
+help_scripts
+
