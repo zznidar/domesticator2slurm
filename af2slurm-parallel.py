@@ -18,6 +18,21 @@ def parse_cmd_args():
     parser.add_argument("fasta", help="Path to fasta file", type=str)
     parser.add_argument("out_dir", help="Directory to write the results to")
     parser.add_argument(
+        "--proteinmpnn",
+        help="Fasta input is ProteinMPNN output file. Ranks sequences by score",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--filter-proteinmpnn", help="Filter best X fasta sequences sorted by 'Score'", type=int, default=1000
+    )
+    parser.add_argument(
+        "--target",
+        help="target sequence to predict along with your designed binder",
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
         "--dry-run",
         help="Do not submit any jobs to slurm, just print slurm commands",
         default=False,
@@ -303,6 +318,9 @@ def main():
     out_dir = Path(args.out_dir)
     fasta_file = args.fasta
     job_name = args.job_name if args.job_name else fasta_file
+    proteinmppn = args.proteinmpnn
+    target_sequence = args.target
+    filter_proteinmpnn = args.filter_proteinmpnn
 
     # Set maximum group size, total amino acid count, and size change for clustering sequences
     MAX_GROUP_SIZE = args.max_group_size #--max-group-size 30 {args.save_recycles}
@@ -310,25 +328,35 @@ def main():
     MAX_SIZE_CHANGE = args.max_size_change #--max-size-change
     GROUPS = []
 
-    # Read in a list of sequences from a FASTA file and sort them by score
-    seqs = list(SeqIO.parse(open(fasta_file), 'fasta'))
-    seqs = sorted(seqs, key=lambda seq: float(parse_fasta_description(seq.description)['score']))
+    # Create the output directory if it doesn't exist
+    os.makedirs(out_dir, exist_ok=True)
 
-    # Take the top 1000 sequences and the native sequence
-    first = seqs[0]
-    seqs = [first] + seqs[:1000]
-
-    # Write the selected sequences to a new FASTA file with modified IDs
-    with open(f'{job_name}.fasta', 'w') as out_file:
-        for seq in seqs:
-            info = parse_fasta_description(seq.description)
-            new_id = f"{info['sample']}|{info['score']} {info['T']} {info['global_score']}"
-            seq = str(seq.seq).replace(' ','').replace('-','').replace('/',':')
-            out_file.write(f'>{new_id}\n')
-            out_file.write(f'{seq}\n')
+    # If ProteinMPNN is input, sort by score and take best X
+    if proteinmppn:
+         # Read in a list of sequences from a FASTA file and sort them by score
+        seqs = list(SeqIO.parse(open(fasta_file), 'fasta'))
+        
+        # Sort without first sequence
+        first = seqs[0]
+        seqs = seqs[1:]
+        seqs = sorted(seqs, key=lambda seq: float(parse_fasta_description(seq.description)['score']))
+        seqs = [first] + seqs
     
-    # Read in a list of sequences from the new FASTA file
-    seq_list = list(SeqIO.parse(open(f'{job_name}.fasta'), 'fasta'))
+        # Take the top X sequences and the native sequence
+        seqs = seqs[:filter_proteinmpnn]
+
+        # Write the selected sequences to a new FASTA file with modified IDs
+        with open(f'{out_dir}/{job_name}.fasta', 'w') as seq_list:
+            seq_list.write(f">Original_sequence\n{str(seqs[0].seq).replace(' ','').replace('-','').replace('/',':')}{f':{target_sequence}' if target_sequence else ''}\n")
+            for seq in seqs[1:]:
+                info = parse_fasta_description(seq.description)
+                new_id = f"{info['sample']}|{info['score']} {info['T']} {info['global_score']}"
+                seq_list.write(f">{new_id}\n{str(seq.seq).replace(' ','').replace('-','').replace('/',':')}{f':{target_sequence}' if target_sequence else ''}\n")
+        
+        # Read in a list of sequences from the new FASTA file
+        seq_list = list(SeqIO.parse(open(seq_list.name), 'fasta'))
+    else:
+        seq_list = list(SeqIO.parse(open(fasta_file), 'fasta'))
 
     # Initialize a new group with the first sequence
     seq = seq_list[0]
@@ -353,9 +381,6 @@ def main():
             group_size += 1
             group_total_AA += len(seq)
             last_added_length = len(seq)
-    
-    # Create the output directory if it doesn't exist
-    os.makedirs(out_dir, exist_ok=True)
 
     #Write each group to a separate file and generate commands to run the ColabFold program on each file
     for n, g in enumerate(GROUPS):
@@ -364,7 +389,7 @@ def main():
     fastas = sorted(glob(f'{out_dir}/*.fasta'))
 
     #Create a file to store the commands
-    print(f'{out_dir}/run.tasks')
+    #print(f'{out_dir}/run.tasks')
     with open(f'{out_dir}/run.tasks', 'w') as f:
         for fasta in fastas:
             fasta_name = Path(fasta).stem
@@ -417,13 +442,13 @@ def main():
     GROUP_SIZE=1
     task_list = f'{out_dir}/run.tasks'
     num_tasks = ceil(len(lines)/GROUP_SIZE)
-    print(num_tasks)
+    #print(num_tasks)
     
     #Submit
     dry_run = args.dry_run
     
 
-    cmd_string = f"export GROUP_SIZE=1; sbatch {slurm_params} -a 1-{num_tasks} /home/aljubetic/scripts/wrapper_slurm_array_job_group.sh {task_list}"
+    cmd_string = f"export GROUP_SIZE=1; sbatch {slurm_params} -a 1-{num_tasks} scripts/wrapper_slurm_array_job_group.sh {task_list}"
     if dry_run:
         print(cmd_string)
     else:
