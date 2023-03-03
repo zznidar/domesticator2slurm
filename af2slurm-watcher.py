@@ -7,11 +7,12 @@ import os
 import shutil
 from pathlib import Path
 import logging
+from typing import Tuple
 
 
 def move_over_fasta_file(
     file_path: str, out_folder: str, dry_run: bool = False
-) -> tuple[str, str, str]:  # dry_run is set to 0 which means the comand goes through
+) -> Tuple[str, str, str]:  # dry_run is set to 0 which means the comand goes through
     """Makes a file to the out folder.
     Returns the path to the fasta file, the output folder and any first line comments, without the comment char (to be used as arguments for colabfold_batch)
     """
@@ -118,7 +119,7 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(
-        encoding="utf-8",
+        #encoding="utf-8",
         level=logging.DEBUG,
         format="%(asctime)s %(message)s",
         handlers=[logging.FileHandler(args.log_path_name), logging.StreamHandler()],
