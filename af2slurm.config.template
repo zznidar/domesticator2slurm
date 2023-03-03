@@ -1,5 +1,6 @@
 in_folder = ./in
 out_folder = ./out
+log_path_name = out.log
 scan_interval_s = 60
 env_setup_script = /home/aljubetic/bin/set_up_AF2.3.sh
 colabfold_path = /home/aljubetic/AF2/CF2.3/colabfold-conda/bin/colabfold_batch 
