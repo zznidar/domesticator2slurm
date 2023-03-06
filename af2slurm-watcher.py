@@ -32,18 +32,18 @@ def move_over_fasta_file(
         lines = source_file.read()
         lines = lines.lstrip(" \n").splitlines()
         first_line = lines[0].strip()
-        if first_line[0] == "#":  # if the first non empty char of the first line is a comment symbol
+        if len(first_line)>0 and first_line[0] == "#":  # if the first non empty char of the first line is a comment symbol
             colab_args = first_line[1:]
             del lines[0]
         else:
             colab_args = ""
 
     # add fasta header if it is missing. Just use the name of the file
-    if lines[0][0] != ">":
+    if len(lines[0])>0 and lines[0][0] != ">":
         lines.insert(0, ">" + stem_name)
 
     def filter_stars_spaces(line):
-        if line[0] == ">":  # if fasta header, don't do any replacements
+        if len(line)>0 and line[0] == ">":  # if fasta header, don't do any replacements
             return line
         # get rid of stars and spaces in the sequence
         return line.replace("*", "").replace(" ", "")
