@@ -128,7 +128,7 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(
-        encoding="utf-8",
+        #encoding="utf-8",
         level=logging.DEBUG,
         format="%(asctime)s %(message)s",
         handlers=[logging.FileHandler(args.log_path_name), logging.StreamHandler()],
