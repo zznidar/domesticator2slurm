@@ -128,8 +128,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .vscode
+in/
 out/
 help_scripts
 af2slurm.config
-
-testing.ipynb

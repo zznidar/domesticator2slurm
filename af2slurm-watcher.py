@@ -28,6 +28,9 @@ def move_over_fasta_file(
     out_pathname = out_sub_folder / file_path.name
     os.makedirs(out_sub_folder, exist_ok=True)
 
+    #copy original input file (with arguments) and add ".original"
+    shutil.copy(file_path, str(out_pathname)+".original")
+
     # Extract colab_args
     with open(file_path) as source_file:
         # skip empty lines at the start of the file
