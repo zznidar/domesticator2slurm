@@ -32,8 +32,8 @@ def move_over_fasta_file(
         lines = source_file.read()
         lines = lines.lstrip(" \n").splitlines()
         first_line = lines[0].strip()
-        regex_pattern = re.compile(r"^\s*#\s*-\s*")  # Create regex pattern object
-        if regex_pattern.match(first_line):  # if the first line matches the pattern
+        match_colabfold_args_line = re.compile(r"^\s*#\s*-\s*")  
+        if match_colabfold_args_line.match(first_line):  # if the first line matches the pattern
             colab_args = first_line.lstrip(
                 "#"
             ).strip()  # Remove only the # symbol from the beginning of the line
