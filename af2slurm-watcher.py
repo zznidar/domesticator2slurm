@@ -7,11 +7,13 @@ import os
 import shutil
 from pathlib import Path
 import re
+import logging
+from typing import Tuple
 
 
 def move_over_fasta_file(
     file_path: str, out_folder: str, dry_run: bool = False
-) -> tuple[str, str, str]:  # dry_run is set to 0 which means the comand goes through
+) -> Tuple[str, str, str]:  # dry_run is set to 0 which means the comand goes through
     """Makes a file to the out folder.
     Returns the path to the fasta/MSA file, the output folder and any first line comments, without the comment char (to be used as arguments for colabfold_batch)
     """
@@ -32,7 +34,8 @@ def move_over_fasta_file(
         lines = source_file.read()
         lines = lines.lstrip(" \n").splitlines()
         first_line = lines[0].strip()
-        match_colabfold_args_line = re.compile(r"^\s*#\s*-\s*")  
+
+        match_colabfold_args_line = re.compile(r"^\s*#\s*-\s*")
         if match_colabfold_args_line.match(first_line):  # if the first line matches the pattern
             colab_args = first_line.lstrip(
                 "#"
@@ -41,8 +44,18 @@ def move_over_fasta_file(
         else:
             colab_args = ""
 
-    # Remove possible (*)
-    lines = [l.replace("*", "") for l in lines]
+    # add fasta header if it is missing. Just use the name of the file. DO NOT DO THIS ON .a3m files
+    if lines[0][0] != ">" and file_path.suffix != ".a3m":
+        lines.insert(0, ">" + stem_name)
+
+    def filter_stars_spaces(line):
+        if line[0] == ">":  # if fasta header, don't do any replacements
+            return line
+        # get rid of stars and spaces in the sequence
+        return line.replace("*", "").replace(" ", "")
+
+    if file_path.suffix != ".a3m":  # no filtering should be needed for .a3m files
+        lines = [filter_stars_spaces(l) for l in lines]
 
     with open(out_pathname, "w+") as target_file:
         target_file.write("\n".join(lines))
@@ -72,9 +85,9 @@ def move_and_submit_fasta(fasta_path, args, dry_run=False):
 
     if not dry_run:
         slurm_id = subprocess.getoutput(submit)
-        print(f"Submitted to slurm with ID {slurm_id}")
+        logging.info(f"Submitted to slurm with ID {slurm_id}")
     else:
-        print(submit)
+        logging.info(submit)
 
 
 def main():
@@ -95,6 +108,7 @@ def main():
     )
     parser.add_argument("--in_folder", help="Directory to watch for fasta files", default="./in")
     parser.add_argument("--out_folder", help="Directory to write results to", default="./out")
+    parser.add_argument("--log_path_name", help="Directory to write results to", default="out.log")
     parser.add_argument("--scan_interval_s", help="Scan folder every X seconds", default=60, type=int)
     parser.add_argument(
         "--colabfold_path",
@@ -113,14 +127,21 @@ def main():
     )
     args = parser.parse_args()
 
-    print("Running af2slurm watcher with arguments: " + str(args))
+    logging.basicConfig(
+        encoding="utf-8",
+        level=logging.DEBUG,
+        format="%(asctime)s %(message)s",
+        handlers=[logging.FileHandler(args.log_path_name), logging.StreamHandler()],
+    )
+
+    logging.info("Running af2slurm watcher with arguments: " + str(args))
 
     while True:
         # moves files to the output folder and submit them to slurm
         extensions = [".fasta", ".a3m", ".fasta.txt"]
         fastas = sorted([f for ext in extensions for f in glob(f"{args.in_folder}/*{ext}")])
         for fasta in fastas:
-            print(f"Submitting file: {fasta}")
+            logging.info(f"Submitting file: {fasta}")
             move_and_submit_fasta(fasta, args, dry_run=args.dry_run)
         if args.dry_run:
             # only execute loop once if we are doing a dry run
