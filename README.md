@@ -7,5 +7,5 @@ Scripts to run AF2 with slurm integration.
 ```python
 python -m venv .venv
 source .venv/bin/activate
-pip install ConfigArgParse
+pip install ConfigArgParse biopython
 ```

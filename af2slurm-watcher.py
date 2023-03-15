@@ -42,6 +42,7 @@ def move_over_fasta_file(
         regex_pattern = re.compile(r'^\s*#\s*-\s*')  # Create regex pattern object
         if regex_pattern.match(first_line): # if the first line matches the pattern
             colab_args = first_line.lstrip('#').lstrip('-').strip()  # Remove only the # symbol from the beginning of the line
+            print(colab_args)
             del lines[0]  # Remove the first line from the list
         else:
             colab_args = ''
@@ -67,7 +68,7 @@ def create_slurm_submit_line(file_name, slurm_options, colabfold_options):
 
 def move_and_submit_fasta(fasta_path, args, dry_run=False):
     # fast_path is a full path to a fasta file in ./in directory
-    target_fasta, out_path_name, colabfold_arguments = move_over_fasta_file(fasta_path, args.out_folder)
+    target_fasta, out_path_name, colabfold_arguments = move_over_fasta_file(fasta_path, out_folder=args.out_folder, dry_run=args.dry_run)
 
     colabfold_command= f"source {args.env_setup_script} && {args.colabfold_path} {colabfold_arguments} {target_fasta} {out_path_name}"
 
