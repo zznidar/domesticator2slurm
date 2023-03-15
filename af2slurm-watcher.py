@@ -18,17 +18,10 @@ def move_over_fasta_file(
     file_path = Path(file_path)
     out_folder = Path(out_folder)
 
-    # Rename .fasta.txt to .fasta
-    if file_path.suffix == '.txt':
-        new_file_path = '.'.join(str(file_path).split('.')[:-1])
-        file_path = Path(new_file_path)
-
-    # Check if file name ends with .fasta or .a3m
-    if not file_path.suffix in ('.fasta', '.a3m'):
-        raise ValueError("File name does not end with '.fasta' nor '.a3m'")
-
     stem_name = file_path.stem # stem is file name without extension 
-    
+    if stem_name.endswith('.fasta'): # remove the extra .fasta if this is a txt.fasta
+        stem_name = stem_name[:-len('.fasta')]
+        
     out_sub_folder = out_folder/stem_name
     out_pathname = out_sub_folder/file_path.name 
     os.makedirs(out_sub_folder, exist_ok=True)
@@ -41,15 +34,13 @@ def move_over_fasta_file(
         first_line = lines[0].strip()
         regex_pattern = re.compile(r'^\s*#\s*-\s*')  # Create regex pattern object
         if regex_pattern.match(first_line): # if the first line matches the pattern
-            colab_args = first_line.lstrip('#').lstrip('-').strip()  # Remove only the # symbol from the beginning of the line
-            print(colab_args)
+            colab_args = first_line.lstrip('#').strip()  # Remove only the # symbol from the beginning of the line
             del lines[0]  # Remove the first line from the list
         else:
             colab_args = ''
     
-    # Remove possible (*) in fasta
-    if file_path.suffix == '.fasta':
-        lines = [l.replace('*','') for l in lines]
+    # Remove possible (*) 
+    lines = [l.replace('*','') for l in lines]
         
     with open(out_pathname, 'w+') as target_file:
         target_file.write("\n".join(lines))
