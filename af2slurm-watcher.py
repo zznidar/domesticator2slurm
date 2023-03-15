@@ -6,6 +6,7 @@ from glob import glob
 import os
 import shutil
 from pathlib import Path
+import re
 import logging
 from typing import Tuple
 
@@ -14,32 +15,37 @@ def move_over_fasta_file(
     file_path: str, out_folder: str, dry_run: bool = False
 ) -> Tuple[str, str, str]:  # dry_run is set to 0 which means the comand goes through
     """Makes a file to the out folder.
-    Returns the path to the fasta file, the output folder and any first line comments, without the comment char (to be used as arguments for colabfold_batch)
+    Returns the path to the fasta/MSA file, the output folder and any first line comments, without the comment char (to be used as arguments for colabfold_batch)
     """
     file_path = Path(file_path)
     out_folder = Path(out_folder)
-    if not file_path.suffix == ".fasta":
-        raise ValueError("File name does not end with '.fasta'")
 
     stem_name = file_path.stem  # stem is file name without extension
+    if stem_name.endswith(".fasta"):  # remove the extra .fasta if this is a txt.fasta
+        stem_name = stem_name[: -len(".fasta")]
 
     out_sub_folder = out_folder / stem_name
     out_pathname = out_sub_folder / file_path.name
     os.makedirs(out_sub_folder, exist_ok=True)
 
+    # Extract colab_args
     with open(file_path) as source_file:
         # skip empty lines at the start of the file
         lines = source_file.read()
         lines = lines.lstrip(" \n").splitlines()
         first_line = lines[0].strip()
-        if len(first_line)>0 and first_line[0] == "#":  # if the first non empty char of the first line is a comment symbol
-            colab_args = first_line[1:]
-            del lines[0]
+
+        match_colabfold_args_line = re.compile(r"^\s*#\s*-\s*")
+        if match_colabfold_args_line.match(first_line):  # if the first line matches the pattern
+            colab_args = first_line.lstrip(
+                "#"
+            ).strip()  # Remove only the # symbol from the beginning of the line
+            del lines[0]  # Remove the first line from the list
         else:
             colab_args = ""
 
-    # add fasta header if it is missing. Just use the name of the file
-    if len(lines[0])>0 and lines[0][0] != ">":
+    # add fasta header if it is missing. Just use the name of the file. DO NOT DO THIS ON .a3m files
+    if lines[0][0] != ">" and file_path.suffix != ".a3m":
         lines.insert(0, ">" + stem_name)
 
     def filter_stars_spaces(line):
@@ -48,7 +54,8 @@ def move_over_fasta_file(
         # get rid of stars and spaces in the sequence
         return line.replace("*", "").replace(" ", "")
 
-    lines = [filter_stars_spaces(l) for l in lines]
+    if file_path.suffix != ".a3m":  # no filtering should be needed for .a3m files
+        lines = [filter_stars_spaces(l) for l in lines]
 
     with open(out_pathname, "w+") as target_file:
         target_file.write("\n".join(lines))
@@ -68,7 +75,9 @@ def create_slurm_submit_line(file_name, slurm_options, colabfold_options):
 
 def move_and_submit_fasta(fasta_path, args, dry_run=False):
     # fast_path is a full path to a fasta file in ./in directory
-    target_fasta, out_path_name, colabfold_arguments = move_over_fasta_file(fasta_path, args.out_folder)
+    target_fasta, out_path_name, colabfold_arguments = move_over_fasta_file(
+        fasta_path, out_folder=args.out_folder, dry_run=args.dry_run
+    )
 
     colabfold_command = f"source {args.env_setup_script} && {args.colabfold_path} {colabfold_arguments} {target_fasta} {out_path_name}"
 
@@ -129,7 +138,8 @@ def main():
 
     while True:
         # moves files to the output folder and submit them to slurm
-        fastas = sorted(glob(f"{args.in_folder}/*.fasta"))
+        extensions = [".fasta", ".a3m", ".fasta.txt"]
+        fastas = sorted([f for ext in extensions for f in glob(f"{args.in_folder}/*{ext}")])
         for fasta in fastas:
             logging.info(f"Submitting file: {fasta}")
             move_and_submit_fasta(fasta, args, dry_run=args.dry_run)
