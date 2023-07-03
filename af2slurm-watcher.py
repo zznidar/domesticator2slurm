@@ -147,7 +147,7 @@ def main():
         while True:
             fastas = sorted([f for ext in extensions for f in glob(f"{args.in_folder}/*{ext}")])
             if fastas == fastas_old:
-                logging.info(f"Debounced. Found {len(fastas)} fasta files.")
+                logging.info(f"Debounced. Found {len(fastas)} fasta files.") if len(fastas) > 0 else None
                 break
             fastas_old = fastas # We can do this because we never append -- we always set the array to a new value (pointer)
             sleep(args.nochange_interval_s)
