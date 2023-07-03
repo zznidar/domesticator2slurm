@@ -21,15 +21,17 @@ def copy_protein_files(in_paths: list, out_folder: str, dry_run: bool = False) -
     Returns the paths to the copies of fasta files.
     """
     # .fasta || .pdb
+    os.makedirs(out_folder, exist_ok=True)
     out_paths = []
     for in_path in in_paths:
         in_path = Path(in_path)
         out_path = Path(out_folder) / in_path.name
-        out_paths.append(out_path)
+        out_paths.append(str(out_path))
         shutil.copy(in_path, out_path)
         if not dry_run:
             os.remove(in_path)
     # TODO: add fasta header if missing!
+    print(f"copying prots {in_paths} to {out_paths}")
     return out_paths
     
 def copy_vector_file(in_path: str, out_folder: str, dry_run: bool = False) -> Tuple [str, str, str]:
@@ -48,6 +50,7 @@ def copy_vector_file(in_path: str, out_folder: str, dry_run: bool = False) -> Tu
 
     # Copy original input gb (with args) as *.original
     shutil.copy(in_path, str(out_path) + ".original")
+    print(f"copying vec {in_path} to {out_path}")
 
     # Extract first line comments
     with open(in_path, "r") as source_file:
@@ -71,7 +74,7 @@ def copy_vector_file(in_path: str, out_folder: str, dry_run: bool = False) -> Tu
         if not dry_run:
             os.remove(in_path)
         
-        return out_path, out_folder, dom_args
+    return out_path, out_folder, dom_args
 
 
 def create_slurm_submit_line(vector_path, slurm_options, domesticator_command):
@@ -83,7 +86,7 @@ def create_slurm_submit_line(vector_path, slurm_options, domesticator_command):
 def submit_job(vector_path, protein_paths, args, dom_args, dry_run=False):
     # vector_path is a full path to a gb file in ./in directory
 
-    dom_command = f"source {args.env_setup_script} && {args.domesticator_path} {' '.join(protein_paths)} {vector_path} {dom_args}"
+    dom_command = f"source {args.env_setup_script} && {args.colabfold_path} {' '.join(protein_paths)} {vector_path} {dom_args} --no_idt"
 
     submit = create_slurm_submit_line(vector_path, args.slurm_args, dom_command)
 
@@ -131,7 +134,7 @@ def main():
     parser.add_argument(
         "--slurm_args",
         help="arguments for slurm",
-        default="--partition=amd* --ntasks=1 --cpus-per-task=1",
+        default="--partition=amd --ntasks=1 --cpus-per-task=1",
     )
     parser.add_argument(
         "--env_setup_script",
@@ -147,6 +150,8 @@ def main():
         handlers=[logging.FileHandler(args.log_path_name), logging.StreamHandler()],
     )
 
+    # Because Domesticator does not support /out folder, change potentially rel /in path to abs path, then change pwd to tohe specified out_folder
+
     logging.info("Running dom2slurm watcher with arguments: " + str(args))
 
     while True:
@@ -155,6 +160,8 @@ def main():
         extensions_vec = [".gb"]
         fastas = sorted([f for ext in extensions_prot for f in glob(f"{args.in_folder}/*{ext}")])
         gbs = sorted([f for ext in extensions_vec for f in glob(f"{args.in_folder}/*{ext}")])
+
+        print(f"Found the following files: {fastas} and {gbs}")
 
         # Copy all proteins. 
         out_proteins = copy_protein_files(fastas, args.out_folder, dry_run=args.dry_run)
