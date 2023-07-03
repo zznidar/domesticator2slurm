@@ -31,7 +31,6 @@ def copy_protein_files(in_paths: list, out_folder: str, dry_run: bool = False) -
         if not dry_run:
             os.remove(in_path)
     # TODO: add fasta header if missing!
-    print(f"copying prots {in_paths} to {out_paths}")
     return out_paths
     
 def copy_vector_file(in_path: str, out_folder: str, dry_run: bool = False) -> Tuple [str, str, str]:
@@ -53,7 +52,6 @@ def copy_vector_file(in_path: str, out_folder: str, dry_run: bool = False) -> Tu
 
     # Copy original input gb (with args) as *.original
     shutil.copy(in_path, str(out_path) + ".original")
-    print(f"copying vec {in_path} to {out_path}")
 
     # Extract first line comments
     with open(in_path, "r") as source_file:
@@ -175,13 +173,10 @@ def main():
             fastas = sorted([f for ext in extensions_prot for f in glob(f"{args.in_folder}/*{ext}")])
             gbs = sorted([f for ext in extensions_vec for f in glob(f"{args.in_folder}/*{ext}")])
             if files_old == fastas + gbs:
-                logging.info(f"Debounced. Found {len(fastas)} fasta files and {len(gbs)} gb files.")
+                logging.info(f"Debounced. Found {len(fastas)} fasta files and {len(gbs)} gb files.") if len(fastas + gbs) > 0 else None
                 break
-            files_old = fastas + gbs
-            logging.info(f"They are not the same. {files_old} != {fastas + gbs}. Waiting {args.nochange_interval_s} seconds.")
+            files_old = fastas + gbs # We can do this because we never append -- we always set the array to a new value (pointer)
             sleep(args.nochange_interval_s)
-
-        print(f"Found the following files: {fastas} and {gbs}")
 
         # Copy all proteins. 
         out_proteins = copy_protein_files(fastas, args.out_folder, dry_run=args.dry_run)
