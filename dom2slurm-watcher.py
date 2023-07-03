@@ -13,7 +13,7 @@ from typing import Tuple
 print("Domesticator 3 slurm watcher")
 
 # what we do is copy files, schedule run for each gb, then delete files on our end. 
-# On server end, upon finishing Domesticator run, delete the gb in question, then check the folder for other gbs. Should there be more, do nothing. If there are no gbs left, delete fastas as well.
+# TODO: On server end, upon finishing Domesticator run, delete the gb in question, then check the folder for other gbs. Should there be more, do nothing. If there are no gbs left, delete fastas as well.
 # Additional arguments should be written in the .gb file since we run Domesticator for each gb (and pass all fastas to it)
 
 def copy_protein_files(in_paths: list, out_folder: str, dry_run: bool = False) -> list:
@@ -46,7 +46,10 @@ def copy_vector_file(in_path: str, out_folder: str, dry_run: bool = False) -> Tu
     if stem_name.endswith(".gb"):  # remove the extra .gb if this is a txt.gb
         stem_name = stem_name[: -len(".gb")]
 
-    out_path = out_folder / in_path.name
+    out_subfolder = out_folder / stem_name
+    out_path = out_subfolder / in_path.name
+
+    os.makedirs(out_subfolder, exist_ok=True)
 
     # Copy original input gb (with args) as *.original
     shutil.copy(in_path, str(out_path) + ".original")
@@ -74,7 +77,7 @@ def copy_vector_file(in_path: str, out_folder: str, dry_run: bool = False) -> Tu
         if not dry_run:
             os.remove(in_path)
         
-    return out_path, out_folder, dom_args
+    return out_path, out_subfolder, dom_args
 
 
 def create_slurm_submit_line(vector_path, slurm_options, domesticator_command):
@@ -150,7 +153,13 @@ def main():
         handlers=[logging.FileHandler(args.log_path_name), logging.StreamHandler()],
     )
 
-    # Because Domesticator does not support /out folder, change potentially rel /in path to abs path, then change pwd to tohe specified out_folder
+    # Because Domesticator does not support /out folder, change potentially rel /in path to abs path, then change pwd to to the specified out_folder
+    args.in_folder = str(Path(args.in_folder).resolve())
+    args.out_folder = str(Path(args.out_folder).resolve()) # change out folder as well, in case we refer to it at a later point in time
+    starting_cwd = os.getcwd()
+
+    # Also, for each vector, we should create a new subfolder -- just because the output is always named order.dna.fasta, which means they get overwritten if multiple vectors are submitted.
+
 
     logging.info("Running dom2slurm watcher with arguments: " + str(args))
 
@@ -171,7 +180,9 @@ def main():
             logging.info(f"Submitting vector file: {gb}")
             out_vector, out_folder, dom_args = copy_vector_file(gb, args.out_folder, dry_run=args.dry_run)
 
+            os.chdir(out_folder)
             submit_job(out_vector, out_proteins, args, dom_args, dry_run=args.dry_run)
+            os.chdir(starting_cwd)
 
         if args.dry_run:
             # only execute loop once if we are doing a dry run
