@@ -129,6 +129,7 @@ def main():
     parser.add_argument("--out_folder", help="Directory to write results to", default="./out")
     parser.add_argument("--log_path_name", help="Filename path to write the log to", default="out.log")
     parser.add_argument("--scan_interval_s", help="Scan folder every X seconds", default=60, type=int)
+    parser.add_argument("--nochange_interval_s", help="When scanning, wait X seconds to confirm all files have been copied", default=5, type=int)
     parser.add_argument(
         "--colabfold_path",
         help="find path to the colabfold",
@@ -167,8 +168,18 @@ def main():
         # moves files to the output folder and submit them to slurm
         extensions_prot = [".fasta", ".pdb", ".fasta.txt"]
         extensions_vec = [".gb"]
-        fastas = sorted([f for ext in extensions_prot for f in glob(f"{args.in_folder}/*{ext}")])
-        gbs = sorted([f for ext in extensions_vec for f in glob(f"{args.in_folder}/*{ext}")])
+
+        # Debouncer: wait until no new files are added to the folder for X seconds
+        files_old = []
+        while True:
+            fastas = sorted([f for ext in extensions_prot for f in glob(f"{args.in_folder}/*{ext}")])
+            gbs = sorted([f for ext in extensions_vec for f in glob(f"{args.in_folder}/*{ext}")])
+            if files_old == fastas + gbs:
+                logging.info(f"Debounced. Found {len(fastas)} fasta files and {len(gbs)} gb files.")
+                break
+            files_old = fastas + gbs
+            logging.info(f"They are not the same. {files_old} != {fastas + gbs}. Waiting {args.nochange_interval_s} seconds.")
+            sleep(args.nochange_interval_s)
 
         print(f"Found the following files: {fastas} and {gbs}")
 
