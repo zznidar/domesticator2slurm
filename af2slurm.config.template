@@ -2,6 +2,7 @@ in_folder = ./in
 out_folder = ./out
 log_path_name = out.log
 scan_interval_s = 60
+nochange_interval_s = 5
 env_setup_script = /home/aljubetic/bin/set_up_AF2.3.sh
 colabfold_path = /home/aljubetic/AF2/CF2.3/colabfold-conda/bin/colabfold_batch 
 slurm_args = --partition=gpu --gres=gpu:A40:1 --ntasks=1 --cpus-per-task=2

@@ -113,6 +113,7 @@ def main():
     parser.add_argument("--out_folder", help="Directory to write results to", default="./out")
     parser.add_argument("--log_path_name", help="Directory to write results to", default="out.log")
     parser.add_argument("--scan_interval_s", help="Scan folder every X seconds", default=60, type=int)
+    parser.add_argument("--nochange_interval_s", help="When scanning, wait X seconds to confirm all files have been copied", default=5, type=int)
     parser.add_argument(
         "--colabfold_path",
         help="find path to the colabfold",
@@ -142,7 +143,14 @@ def main():
     while True:
         # moves files to the output folder and submit them to slurm
         extensions = [".fasta", ".a3m", ".fasta.txt"]
-        fastas = sorted([f for ext in extensions for f in glob(f"{args.in_folder}/*{ext}")])
+        fastas_old = []
+        while True:
+            fastas = sorted([f for ext in extensions for f in glob(f"{args.in_folder}/*{ext}")])
+            if fastas == fastas_old:
+                logging.info(f"Debounced. Found {len(fastas)} fasta files.")
+                break
+            fastas_old = fastas # We can do this because we never append -- we always set the array to a new value (pointer)
+            sleep(args.nochange_interval_s)
         for fasta in fastas:
             logging.info(f"Submitting file: {fasta}")
             move_and_submit_fasta(fasta, args, dry_run=args.dry_run)
