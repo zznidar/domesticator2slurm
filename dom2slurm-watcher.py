@@ -178,6 +178,11 @@ def main():
             files_old = fastas + gbs # We can do this because we never append -- we always set the array to a new value (pointer)
             sleep(args.nochange_interval_s)
 
+        if(len(fastas) == 0 or len(gbs) == 0):
+            logging.info(f"Found {len(fastas)} fasta files and {len(gbs)} gb files. You need to have both a protein file and a vector file.") if len(fastas) != len(gbs) else None
+            sleep(args.scan_interval_s)
+            continue
+
         # Copy all proteins. 
         out_proteins = copy_protein_files(fastas, args.out_folder, dry_run=args.dry_run)
 
