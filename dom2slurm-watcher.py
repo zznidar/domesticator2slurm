@@ -43,7 +43,7 @@ def copy_protein_files(in_path: str, out_folder: str, dry_run: bool = False) -> 
         lines = lines.lstrip(" \n").splitlines()
         first_line = lines[0].strip()
 
-        match_colabfold_args_line = re.compile(r"^\s*#\s*-\s*")
+        match_colabfold_args_line = re.compile(r"^\s*#\s*")
         if match_colabfold_args_line.match(first_line):  # if the first line matches the pattern
             dom_args = first_line.lstrip(
                 "#"
@@ -54,7 +54,7 @@ def copy_protein_files(in_path: str, out_folder: str, dry_run: bool = False) -> 
             logging.warning(f"WARNING: {in_path} does not contain # vector.gb! This is not allowed. Please add arguments to the first line of the file.")
 
     # add fasta header if it is missing. Just use the name of the file. DO NOT DO THIS ON .a3m files
-    if lines[0][0] != ">" and in_path.suffix != ".a3m":
+    if lines[0][0] != ">" and in_path.suffix != ".pdb":
         lines.insert(0, ">" + stem_name)
 
     def filter_stars_spaces(line):
