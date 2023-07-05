@@ -16,22 +16,64 @@ print("Domesticator 3 slurm watcher")
 # TODO: On server end, upon finishing Domesticator run, delete the gb in question, then check the folder for other gbs. Should there be more, do nothing. If there are no gbs left, delete fastas as well.
 # Additional arguments should be written in the .gb file since we run Domesticator for each gb (and pass all fastas to it)
 
-def copy_protein_files(in_paths: list, out_folder: str, dry_run: bool = False) -> list:
-    """Copies fasta files to the out folder.
-    Returns the paths to the copies of fasta files.
+def copy_protein_files(in_path: str, out_folder: str, dry_run: bool = False) -> list:
+    """Copies fasta file to the out folder and parses it.
+    Returns the path to the parsed copy, output (sub)folder and the first-line comment without the comment char to be used as args for domesticator. This includes the vector filename.extension
     """
     # .fasta || .pdb
-    os.makedirs(out_folder, exist_ok=True)
-    out_paths = []
-    for in_path in in_paths:
-        in_path = Path(in_path)
-        out_path = Path(out_folder) / in_path.name
-        out_paths.append(str(out_path))
-        shutil.copy(in_path, out_path)
-        if not dry_run:
-            os.remove(in_path)
-    # TODO: add fasta header if missing!
-    return out_paths
+    in_path = Path(in_path)
+    out_folder = Path(out_folder)
+
+    stem_name = in_path.stem  # stem is file name without extension
+    if stem_name.endswith(".fasta"):  # remove the extra .fasta if this is a txt.fasta
+        stem_name = stem_name[: -len(".fasta")]
+
+    out_subfolder = out_folder / stem_name
+    out_path = out_subfolder / in_path.name
+
+    os.makedirs(out_subfolder, exist_ok=True)
+
+    #copy original input file (with arguments) and add ".original"
+    shutil.copy(in_path, str(out_path)+".original")
+
+    # Extract colab_args
+    with open(in_path, "r") as source_file:
+        # skip empty lines at the start of the file
+        lines = source_file.read()
+        lines = lines.lstrip(" \n").splitlines()
+        first_line = lines[0].strip()
+
+        match_colabfold_args_line = re.compile(r"^\s*#\s*")
+        if match_colabfold_args_line.match(first_line):  # if the first line matches the pattern
+            dom_args = first_line.lstrip(
+                "#"
+            ).strip()  # Remove only the # symbol from the beginning of the line
+            del lines[0]  # Remove the first line from the list
+        else:
+            dom_args = "" # This should never happen -- vector.gb file is mandatory!
+            logging.warning(f"WARNING: {in_path} does not contain # vector.gb! This is not allowed. Please add arguments to the first line of the file.")
+
+    # add fasta header if it is missing. Just use the name of the file. DO NOT DO THIS ON .a3m files
+    if lines[0][0] != ">" and in_path.suffix != ".pdb":
+        lines.insert(0, ">" + stem_name)
+
+    def filter_stars_spaces(line):
+        if len(line)>0 and line[0] == ">":  # if fasta header, don't do any replacements
+            return line
+        # get rid of stars and spaces in the sequence
+        return line.replace("*", "").replace(" ", "")
+
+    if in_path.suffix != ".pdb":  # I don't think .a3m is supported by domesticator?
+        lines = [filter_stars_spaces(l) for l in lines]
+
+    with open(out_path, "w+") as target_file:
+        target_file.write("\n".join(lines))
+    
+    if not dry_run:
+        os.remove(in_path)
+        
+    return out_path, out_subfolder, dom_args
+
     
 def copy_vector_file(in_path: str, out_folder: str, dry_run: bool = False) -> Tuple [str, str, str]:
     """Copies gb file to the out folder.
@@ -78,18 +120,18 @@ def copy_vector_file(in_path: str, out_folder: str, dry_run: bool = False) -> Tu
     return out_path, out_subfolder, dom_args
 
 
-def create_slurm_submit_line(vector_path, slurm_options, domesticator_command):
-    vector_path = Path(vector_path) # only used to name the job
+def create_slurm_submit_line(protein_path, slurm_options, domesticator_command):
+    protein_path = Path(protein_path) # only used to name the job
     # submit line is composed of: sbatch + slurm_args (config file),
-    slurm = f"{slurm_options} --parsable --job-name={vector_path.stem} --output={vector_path.with_suffix('.out')} -e {vector_path.with_suffix('.out')} "
+    slurm = f"{slurm_options} --parsable --job-name={protein_path.stem} --output={protein_path.with_suffix('.out')} -e {protein_path.with_suffix('.out')} "
     return f"""sbatch  {slurm} --wrap="{domesticator_command}" """
 
-def submit_job(vector_path, protein_paths, args, dom_args, dry_run=False):
+def submit_job(protein_path, args, dom_args, dry_run=False):
     # vector_path is a full path to a gb file in ./in directory
 
-    dom_command = f"source {args.env_setup_script} && {args.colabfold_path} {' '.join(protein_paths)} {vector_path} {dom_args} --no_idt"
+    dom_command = f"source {args.env_setup_script} && {args.colabfold_path} {protein_path} {args.vectors_folder}/{dom_args} --no_idt"
 
-    submit = create_slurm_submit_line(vector_path, args.slurm_args, dom_command)
+    submit = create_slurm_submit_line(protein_path, args.slurm_args, dom_command)
 
     if not dry_run:
         slurm_id = subprocess.getoutput(submit)
@@ -127,7 +169,7 @@ def main():
     parser.add_argument("--out_folder", help="Directory to write results to", default="./out")
     parser.add_argument("--log_path_name", help="Filename path to write the log to", default="out.log")
     parser.add_argument("--scan_interval_s", help="Scan folder every X seconds", default=60, type=int)
-    parser.add_argument("--nochange_interval_s", help="When scanning, wait X seconds to confirm all files have been copied", default=5, type=int)
+    parser.add_argument("--vectors_folder", help="Directory with vector.gb files", default="./vectors")
     parser.add_argument(
         "--colabfold_path",
         help="find path to the colabfold",
@@ -155,6 +197,7 @@ def main():
     # Because Domesticator does not support /out folder, change potentially rel /in path to abs path, then change pwd to to the specified out_folder
     args.in_folder = str(Path(args.in_folder).resolve())
     args.out_folder = str(Path(args.out_folder).resolve()) # change out folder as well, in case we refer to it at a later point in time
+    args.vectors_folder = str(Path(args.vectors_folder).resolve()) # is without trailing slash
     starting_cwd = os.getcwd()
 
     # Also, for each vector, we should create a new subfolder -- just because the output is always named order.dna.fasta, which means they get overwritten if multiple vectors are submitted.
@@ -165,43 +208,20 @@ def main():
     while True:
         # moves files to the output folder and submit them to slurm
         extensions_prot = [".fasta", ".pdb", ".fasta.txt"]
-        extensions_vec = [".gb"]
+        fastas = sorted([f for ext in extensions_prot for f in glob(f"{args.in_folder}/*{ext}")])
+        for fasta in fastas:
+            logging.info(f"Submitting protein file: {fasta}")
+            out_protein, out_folder, dom_args = copy_protein_files(fasta, args.out_folder, dry_run=args.dry_run)
 
-        # Debouncer: wait until no new files are added to the folder for X seconds
-        files_old = []
-        while True:
-            fastas = sorted([f for ext in extensions_prot for f in glob(f"{args.in_folder}/*{ext}")])
-            gbs = sorted([f for ext in extensions_vec for f in glob(f"{args.in_folder}/*{ext}")])
-            if files_old == fastas + gbs:
-                logging.info(f"Debounced. Found {len(fastas)} fasta files and {len(gbs)} gb files.") if len(fastas + gbs) > 0 else None
-                break
-            files_old = fastas + gbs # We can do this because we never append -- we always set the array to a new value (pointer)
-            sleep(args.nochange_interval_s)
-
-        if(len(fastas) == 0 or len(gbs) == 0):
-            logging.info(f"Found {len(fastas)} fasta files and {len(gbs)} gb files. You need to have both a protein file and a vector file.") if len(fastas) != len(gbs) else None
-            sleep(args.scan_interval_s)
-            continue
-
-        # Copy all proteins. 
-        out_proteins = copy_protein_files(fastas, args.out_folder, dry_run=args.dry_run)
-
-        # For each vector, submit all fastas (multiple _protein_ args can be specified, and one _vector_)
-        for gb in gbs:
-            logging.info(f"Submitting vector file: {gb}")
-            out_vector, out_folder, dom_args = copy_vector_file(gb, args.out_folder, dry_run=args.dry_run)
-
+            # Wokaround for Domesticator not having --out param 
             os.chdir(out_folder)
-            submit_job(out_vector, out_proteins, args, dom_args, dry_run=args.dry_run)
+            submit_job(out_protein, args, dom_args, dry_run=args.dry_run)
             os.chdir(starting_cwd)
 
         if args.dry_run:
             # only execute loop once if we are doing a dry run
             break
         sleep(args.scan_interval_s)  # continuous scanning of the input folder for fasta files
-
-        # Also add an argument --nochange_interval_s
-        # After sleeping, scan for files. Wait --nochange seconds, then rescan. Should files match, copy them. Else: wait another --nochange seconds.
 
 
 if __name__ == "__main__":

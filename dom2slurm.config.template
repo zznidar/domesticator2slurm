@@ -2,7 +2,7 @@ in_folder = ./in
 out_folder = ./out
 log_path_name = out.log
 scan_interval_s = 60
-nochange_interval_s = 5
+vectors_folder = ./vectors
 env_setup_script = /home/aljubetic/bin/setup_proxy_settings.sh
 colabfold_path = /home/aljubetic/conda/envs/domesticator/bin/python /home/aljubetic/gits/domesticator3/domesticator3 
 slurm_args = --partition=amd --ntasks=1 --cpus-per-task=1
