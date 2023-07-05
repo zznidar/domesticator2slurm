@@ -10,11 +10,6 @@ import re
 import logging
 from typing import Tuple
 
-print("Domesticator 3 slurm watcher")
-
-# what we do is copy files, schedule run for each gb, then delete files on our end. 
-# TODO: On server end, upon finishing Domesticator run, delete the gb in question, then check the folder for other gbs. Should there be more, do nothing. If there are no gbs left, delete fastas as well.
-# Additional arguments should be written in the .gb file since we run Domesticator for each gb (and pass all fastas to it)
 
 def copy_protein_files(in_path: str, out_folder: str, dry_run: bool = False) -> list:
     """Copies fasta file to the out folder and parses it.
@@ -53,7 +48,7 @@ def copy_protein_files(in_path: str, out_folder: str, dry_run: bool = False) -> 
             dom_args = "" # This should never happen -- vector.gb file is mandatory!
             logging.warning(f"WARNING: {in_path} does not contain # vector.gb! This is not allowed. Please add arguments to the first line of the file.")
 
-    # add fasta header if it is missing. Just use the name of the file. DO NOT DO THIS ON .a3m files
+    # add fasta header if it is missing. Just use the name of the file. DO NOT DO THIS ON .pdb files
     if lines[0][0] != ">" and in_path.suffix != ".pdb":
         lines.insert(0, ">" + stem_name)
 
@@ -75,51 +70,6 @@ def copy_protein_files(in_path: str, out_folder: str, dry_run: bool = False) -> 
     return out_path, out_subfolder, dom_args
 
     
-def copy_vector_file(in_path: str, out_folder: str, dry_run: bool = False) -> Tuple [str, str, str]:
-    """Copies gb file to the out folder.
-    Returns the path to the gb file, output folder and any first line comments, without the comment char (to be used as arguments for domesticator_batch)
-    """
-    # .gb
-    in_path = Path(in_path)
-    out_folder = Path(out_folder)
-
-    stem_name = in_path.stem  # stem is file name without extension
-    if stem_name.endswith(".gb"):  # remove the extra .gb if this is a txt.gb
-        stem_name = stem_name[: -len(".gb")]
-
-    out_subfolder = out_folder / stem_name
-    out_path = out_subfolder / in_path.name
-
-    os.makedirs(out_subfolder, exist_ok=True)
-
-    # Copy original input gb (with args) as *.original
-    shutil.copy(in_path, str(out_path) + ".original")
-
-    # Extract first line comments
-    with open(in_path, "r") as source_file:
-        # skip empty lines at the beginning of the file
-        lines = source_file.read()
-        lines = lines.lstrip(" \n").splitlines()
-        first_line = lines[0].strip()
-
-        match_domesticator_args_line = re.compile(r"^\s*#\s*-\s*")
-        if match_domesticator_args_line.match(first_line):  # if the first line matches the pattern
-            dom_args = first_line.lstrip(
-                "#"
-            ).strip()  # Remove only the # symbol from the beginning of the line
-            del lines[0]  # Remove the first line from the list
-        else:
-            dom_args = ""
-        
-        with open(out_path, "w+") as target_file:
-            target_file.write("\n".join(lines))
-        
-        if not dry_run:
-            os.remove(in_path)
-        
-    return out_path, out_subfolder, dom_args
-
-
 def create_slurm_submit_line(protein_path, slurm_options, domesticator_command):
     protein_path = Path(protein_path) # only used to name the job
     # submit line is composed of: sbatch + slurm_args (config file),
@@ -127,7 +77,7 @@ def create_slurm_submit_line(protein_path, slurm_options, domesticator_command):
     return f"""sbatch  {slurm} --wrap="{domesticator_command}" """
 
 def submit_job(protein_path, args, dom_args, dry_run=False):
-    # vector_path is a full path to a gb file in ./in directory
+    # Vector filename is first argument in dom_args; we precede it with the path to the vectors folder
 
     dom_command = f"source {args.env_setup_script} && {args.colabfold_path} {protein_path} {args.vectors_folder}/{dom_args} --no_idt"
 
@@ -139,15 +89,6 @@ def submit_job(protein_path, args, dom_args, dry_run=False):
     else:
         logging.info(submit)
     
-
-## Delete this function, it serves no purpose
-def now_delete_fasta(fasta, dry_run=False):
-    if dry_run:
-        logging.info(f"Would delete {fasta}, but skipping since dry_run is set")
-    else:
-        file_path = Path(fasta)
-        os.remove(file_path)
-
 
 def main():
     parser = ArgParser(
@@ -199,9 +140,6 @@ def main():
     args.out_folder = str(Path(args.out_folder).resolve()) # change out folder as well, in case we refer to it at a later point in time
     args.vectors_folder = str(Path(args.vectors_folder).resolve()) # is without trailing slash
     starting_cwd = os.getcwd()
-
-    # Also, for each vector, we should create a new subfolder -- just because the output is always named order.dna.fasta, which means they get overwritten if multiple vectors are submitted.
-
 
     logging.info("Running dom2slurm watcher with arguments: " + str(args))
 
