@@ -1,5 +1,5 @@
-# domesticator-slurm-runner
-Scripts to run Domesticator with slurm integration.
+# alphafold-slurm-runner
+Scripts to run AF2 with slurm integration.
 
 
 # Installation
@@ -13,6 +13,9 @@ pip install ConfigArgParse biopython
 # Usage of alphafold2slurm
 TBW
 
+
+# domesticator-slurm-runner
+Scripts to run Domesticator with slurm integration.
 
 # Usage of domesticator2slurm
 Copy `.fasta` or `.pdb` file to the specified `in` folder.  
