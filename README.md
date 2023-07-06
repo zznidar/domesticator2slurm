@@ -10,7 +10,11 @@ source .venv/bin/activate
 pip install ConfigArgParse biopython
 ```
 
-# Usage
+# Usage of alphafold2slurm
+TBW
+
+
+# Usage of domesticator2slurm
 Copy `.fasta` or `.pdb` file to the specified `in` folder.  
 The copied file must start with a **comment** which specifies which **vector**.gb to use and any additional arguments to be passed to Domesticator.
 

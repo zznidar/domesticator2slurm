@@ -123,7 +123,7 @@ def main():
     )
     parser.add_argument(
         "--env_setup_script",
-        help="python environment that has AF2 setup",
+        help="python environment that has Domesticator setup",
         default="/home/aljubetic/bin/setup_proxy_settings.sh",
     )
     args = parser.parse_args()
