@@ -145,7 +145,7 @@ def main():
 
     while True:
         # moves files to the output folder and submit them to slurm
-        extensions_prot = [".fasta", ".pdb", ".fasta.txt"]
+        extensions_prot = [".fasta", ".pdb", ".fasta.txt", ".FASTA", ".PDB"]
         fastas = sorted([f for ext in extensions_prot for f in glob(f"{args.in_folder}/*{ext}")])
         for fasta in fastas:
             logging.info(f"Submitting protein file: {fasta}")
