@@ -49,7 +49,7 @@ def copy_protein_files(in_path: str, out_folder: str, dry_run: bool = False) -> 
             logging.warning(f"WARNING: {in_path} does not contain # vector.gb! This is not allowed. Please add arguments to the first line of the file.")
 
     # add fasta header if it is missing. Just use the name of the file. DO NOT DO THIS ON .pdb files
-    if lines[0][0] != ">" and in_path.suffix != ".pdb":
+    if lines[0][0] != ">" and in_path.suffix != ".pdb" and in_path.suffix != ".PDB":
         lines.insert(0, ">" + stem_name)
 
     def filter_stars_spaces(line):
@@ -58,7 +58,7 @@ def copy_protein_files(in_path: str, out_folder: str, dry_run: bool = False) -> 
         # get rid of stars and spaces in the sequence
         return line.replace("*", "").replace(" ", "")
 
-    if in_path.suffix != ".pdb":  # I don't think .a3m is supported by domesticator?
+    if in_path.suffix != ".pdb" and in_path.suffix != ".PDB":  # I don't think .a3m is supported by domesticator?
         lines = [filter_stars_spaces(l) for l in lines]
 
     with open(out_path, "w+") as target_file:
@@ -79,7 +79,7 @@ def create_slurm_submit_line(protein_path, slurm_options, domesticator_command):
 def submit_job(protein_path, args, dom_args, dry_run=False):
     # Vector filename is first argument in dom_args; we precede it with the path to the vectors folder
 
-    dom_command = f"source {args.env_setup_script} && {args.colabfold_path} {protein_path} {args.vectors_folder}/{dom_args} --no_idt"
+    dom_command = f"source {args.env_setup_script} && {args.colabfold_path} '{protein_path}' {args.vectors_folder}/{dom_args} --no_idt"
 
     submit = create_slurm_submit_line(protein_path, args.slurm_args, dom_command)
 
@@ -148,7 +148,7 @@ def main():
         extensions_prot = [".fasta", ".pdb", ".fasta.txt", ".FASTA", ".PDB"]
         fastas = sorted([f for ext in extensions_prot for f in glob(f"{args.in_folder}/*{ext}")])
         for fasta in fastas:
-            logging.info(f"Submitting protein file: {fasta}")
+            logging.info(f'Submitting protein file: "{fasta}"')
             out_protein, out_folder, dom_args = copy_protein_files(fasta, args.out_folder, dry_run=args.dry_run)
 
             # Wokaround for Domesticator not having --out param 
