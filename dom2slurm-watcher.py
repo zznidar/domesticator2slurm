@@ -36,6 +36,9 @@ def copy_protein_files(in_path: str, out_folder: str, dry_run: bool = False) -> 
         # skip empty lines at the start of the file
         lines = source_file.read()
         lines = lines.lstrip(" \n").splitlines()
+        if len(lines) == 0:
+            logging.warning(f"WARNING: {in_path} is an empty file!")
+            return None, None, None
         first_line = lines[0].strip()
 
         match_colabfold_args_line = re.compile(r"^\s*#\s*")
@@ -150,6 +153,12 @@ def main():
         for fasta in fastas:
             logging.info(f'Submitting protein file: "{fasta}"')
             out_protein, out_folder, dom_args = copy_protein_files(fasta, args.out_folder, dry_run=args.dry_run)
+
+            if (out_protein, out_folder, dom_args) == (None, None, None):
+                logging.info(f"Skipping {fasta} because it is empty")
+                # Rename the empty file to .empty to avoid further processing
+                os.rename(fasta, fasta+".empty")
+                continue
 
             # Wokaround for Domesticator not having --out param 
             os.chdir(out_folder)
