@@ -64,6 +64,9 @@ def copy_protein_files(in_path: str, out_folder: str, dry_run: bool = False) -> 
     if in_path.suffix != ".pdb" and in_path.suffix != ".PDB":  # I don't think .a3m is supported by domesticator?
         lines = [filter_stars_spaces(l) for l in lines]
 
+    # Change out extension to lowercase
+    out_path = out_path.with_suffix(out_path.suffix.lower())
+
     with open(out_path, "w+") as target_file:
         target_file.write("\n".join(lines))
     
@@ -157,7 +160,7 @@ def main():
             if (out_protein, out_folder, dom_args) == (None, None, None):
                 logging.info(f"Skipping {fasta} because it is empty")
                 # Rename the empty file to .empty to avoid further processing
-                os.rename(fasta, fasta+".empty")
+                os.rename(fasta, fasta+".empty")    
                 continue
 
             # Wokaround for Domesticator not having --out param 
