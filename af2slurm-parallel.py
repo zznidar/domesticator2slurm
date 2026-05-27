@@ -27,6 +27,9 @@ def parse_cmd_args():
         "--filter-proteinmpnn", help="Filter best X fasta sequences sorted by 'Score'", type=int, default=1000
     )
     parser.add_argument(
+        "--mpnn-include-original", help="Include original sequence in the fasta", type=bool, default=False
+    )
+    parser.add_argument(
         "--target",
         help="target sequence to predict along with your designed binder",
         type=str,
@@ -81,17 +84,18 @@ def parse_cmd_args():
         type=float,
         default=100,
     )
-    parser.add_argument("--num-recycle",
-        help="Number of prediction recycles."
-        "Increasing recycles can improve the quality but slows down the prediction.",
+    parser.add_argument(
+        "--num-recycle",
+        help="Number of prediction recycles. "
+        "Increasing recycles can improve the prediction quality but slows down the prediction.",
         type=int,
-        default=6,
+        default=None,
     )
     parser.add_argument("--recycle-early-stop-tolerance",
         help="Specify convergence criteria."
         "Run until the distance between recycles is within specified value.",
         type=float,
-        default=None,
+        default=100,
     )
     parser.add_argument("--num-ensemble",
         help="Number of ensembles."
@@ -122,14 +126,16 @@ def parse_cmd_args():
     )
     parser.add_argument("--model-order", default="1,2,3,4,5", type=str)
     #parser.add_argument("--host-url", default='')
-    parser.add_argument("--msa-mode",
+    parser.add_argument(
+        "--msa-mode",
         default="mmseqs2_uniref_env",
         choices=[
             "mmseqs2_uniref_env",
             "mmseqs2_uniref",
             "single_sequence",
         ],
-        help="Using an a3m file as input overwrites this option",
+        help="Databases to use to create the MSA: UniRef30+Environmental (default), UniRef30 only or None. "
+        "Using an A3M file as input overwrites this option.",
     )
     parser.add_argument("--model-type",
         help="predict strucutre/complex using the following model."
@@ -339,18 +345,26 @@ def main():
         # Sort without first sequence
         first = seqs[0]
         seqs = seqs[1:]
+        len_before_deduplication = len(seqs)
+        #remove duplicates
+        seqs_dict = {seq.seq: seq for seq in seqs}
+        seqs = list(seqs_dict.values())
+        
+        len_after_deduplication = len(seqs)
+        print(f"Removed {len_before_deduplication-len_after_deduplication} duplicate sequences")
         seqs = sorted(seqs, key=lambda seq: float(parse_fasta_description(seq.description)['score']))
         seqs = [first] + seqs
     
         # Take the top X sequences and the native sequence
-        seqs = seqs[:filter_proteinmpnn]
+        seqs = seqs[:filter_proteinmpnn+1]
 
         # Write the selected sequences to a new FASTA file with modified IDs
         with open(f'{out_dir}/{job_name}.fasta', 'w') as seq_list:
-            seq_list.write(f">Original_sequence\n{str(seqs[0].seq).replace(' ','').replace('-','').replace('/',':')}{f':{target_sequence}' if target_sequence else ''}\n")
+            if args.mpnn_include_original:
+                seq_list.write(f">Original_sequence\n{str(seqs[0].seq).replace(' ','').replace('-','').replace('/',':')}{f':{target_sequence}' if target_sequence else ''}\n")
             for seq in seqs[1:]:
                 info = parse_fasta_description(seq.description)
-                new_id = f"{info['sample']}|{info['score']} {info['T']} {info['global_score']}"
+                new_id = f"{info['sample']}|{info['score']} {info['T']} {info['score']}"
                 seq_list.write(f">{new_id}\n{str(seq.seq).replace(' ','').replace('-','').replace('/',':')}{f':{target_sequence}' if target_sequence else ''}\n")
         
         # Read in a list of sequences from the new FASTA file
@@ -386,69 +400,73 @@ def main():
     for n, g in enumerate(GROUPS):
         write_to_fasta(out_dir / f"g{n:04d}.fasta", g)
 
-    fastas = sorted(glob(f'{out_dir}/*.fasta'))
+    fastas = sorted(glob(f'{out_dir}/g*.fasta'))
 
     #Create a file to store the commands
     #print(f'{out_dir}/run.tasks')
+    #TODO confing should be read from config file and not hardcoded
     with open(f'{out_dir}/run.tasks', 'w') as f:
         for fasta in fastas:
             fasta_name = Path(fasta).stem
-            f.write(f'. /home/aljubetic/bin/set_up_AF2.sh && mkdir -p {out_dir / fasta_name} && ' \
-                f'/home/aljubetic/AF2/CF2/bin/colabfold_batch ' \
-                f'--stop-at-score {args.stop_at_score} ' \
-                f'--num-recycle {args.num_recycle} ' \
-                f'--recycle-early-stop-tolerance {args.recycle_early_stop_tolerance} ' \
-                f'--num-ensemble {args.num_ensemble} ' \
-                f'--num-seeds {args.num_seeds} ' \
-                f'--random-seed {args.random_seed} ' \
-                f'--num-models {args.num_models} ' \
-                f'--recompile-padding {args.recompile_padding} ' \
-                f'--model-order {args.model_order} ' \
+            f.write(f'. /home/aljubetic/bin/set_up_AF2.3.sh && mkdir -p {out_dir / fasta_name} && ' \
+                f'/home/aljubetic/AF2/CF2.3/colabfold-conda/bin/colabfold_batch ' \
+                #f'--stop-at-score {args.stop_at_score} ' \
+                #f'--num-recycle {args.num_recycle} ' \
+                #f'--recycle-early-stop-tolerance {args.recycle_early_stop_tolerance} ' \
+               # f'--num-ensemble {args.num_ensemble} ' \
+               # f'--num-seeds {args.num_seeds} ' \
+               # f'--random-seed {args.random_seed} ' \
+               # f'--num-models {args.num_models} ' \
+               # f'--recompile-padding {args.recompile_padding} ' \
+               # f'--model-order {args.model_order} ' \
                 f'--msa-mode {args.msa_mode} ' \
                 f'--model-type {args.model_type} ' \
-                f'--amber {args.amber} ' \
-                f'--num-relax {args.num_relax} ' \
-                f'--templates {args.templates} ' \
-                f'--custom-template-path {args.custom_template_path} ' \
-                f'--rank {args.rank} ' \
-                f'--pair-mode {args.pair_mode} ' \
-                f'--sort-queries-by {args.sort_queries_by} ' \
-                f'--save-single-representations {args.save_single_representations} ' \
-                f'--save-pair-representations {args.save_pair_representations} ' \
-                f'--use-dropout {args.use_dropout} ' \
-                f'--max-seq {args.max_seq} ' \
-                f'--max-extra-seq {args.max_extra_seq} ' \
-                f'--max-msa {args.max_msa} ' \
-                f'--disable-cluster-profile {args.disable_cluster_profile} ' \
-                f'--zip {args.zip} ' \
-                f'--use-gpu-relax {args.use_gpu_relax} ' \
-                f'--save-all {args.save_all} ' \
-                f'--save-recycles {args.save_recycles} ' \
-                f'--overwrite-existing-results {args.overwrite_existing_results} ' \
-                f'--disable-unified-memory {args.disable_unified_memory}\n')
+               # f'--amber {args.amber} ' \
+               # f'--num-relax {args.num_relax} ' \
+               # f'--templates {args.templates} ' \
+               # f'--custom-template-path {args.custom_template_path} ' \
+               # f'--rank {args.rank} ' \
+               # f'--pair-mode {args.pair_mode} ' \
+               # f'--sort-queries-by {args.sort_queries_by} ' \
+               # f'--save-single-representations {args.save_single_representations} ' \
+               # f'--save-pair-representations {args.save_pair_representations} ' \
+               # f'--use-dropout {args.use_dropout} ' \
+               # f'--max-seq {args.max_seq} ' \
+               # f'--max-extra-seq {args.max_extra_seq} ' \
+               # f'--max-msa {args.max_msa} ' \
+               # f'--disable-cluster-profile {args.disable_cluster_profile} ' \
+               # f'--zip {args.zip} ' \
+               # f'--use-gpu-relax {args.use_gpu_relax} ' \
+               # f'--save-all {args.save_all} ' \
+               # f'--save-recycles {args.save_recycles} ' \
+               # f'--overwrite-existing-results {args.overwrite_existing_results} ' \
+               # f'--disable-unified-memory {args.disable_unified_memory}' \
+               f'{fasta} {out_dir / fasta_name} ' \
+                '\n')
 
     #Read the commands from the file
     with open(f'{out_dir}/run.tasks') as cmds:
         lines = cmds.read()
         lines = lines.split('\n')
-    
+    # delete empty lines
+    lines = [line for line in lines if line.strip()]
     # Prepare params for the jobs
     job_name = args.job_name if args.job_name else fasta_file
-    output_file = args.output if args.output else f"{fasta_name}.out"
+    output_file = args.output if args.output else f"{job_name}.out"
     slurm_params =  f'--partition={args.partition} --gres={args.gres} --ntasks=1 ' \
-                    f'--cpus-per-task={args.cpus_per_task} --job-name={out_dir}/{job_name} ' \
-                    f'--output={output_file} -e {job_name}.err '
+                    f'--cpus-per-task={args.cpus_per_task} --job-name={job_name} ' \
+                    f'--output={out_dir}/{output_file} -e {out_dir}/{job_name}.err '
 
     GROUP_SIZE=1
     task_list = f'{out_dir}/run.tasks'
     num_tasks = ceil(len(lines)/GROUP_SIZE)
-    #print(num_tasks)
+    print(num_tasks)
     
     #Submit
     dry_run = args.dry_run
     
 
-    cmd_string = f"export GROUP_SIZE=1; sbatch {slurm_params} -a 1-{num_tasks} scripts/wrapper_slurm_array_job_group.sh {task_list}"
+    cmd_string = f"export GROUP_SIZE=1; sbatch {slurm_params} -a 1-{num_tasks} /home/aljubetic/scripts/wrapper_slurm_array_job_group.sh {task_list}"
     if dry_run:
         print(cmd_string)
     else:

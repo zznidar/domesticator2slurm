@@ -1,0 +1,99 @@
+#-------------------------------YAML Template for Prosculpt---------------------------------------------------------
+# This template guides you through configuring Prosculpt for your first protein designs! 
+# Steps to follow:
+#   1. Modify the parameters in this YAML file for your specific protein design goal 
+#   2. Drop the modified YAML into the /in directory 
+#   3. That's it! Go for a coffee. 
+#   4. You will find your designs in /out directory in a folder named after your YAML file :)
+
+# For the currious user - what Prosculpt does?
+#   Prosculpt is a pipeline that orchestrates three different ML protein design models.
+#   1. RFdiffusion: Generates protein backbones (structures) based on specified parameters like length, target, etc..
+#   2. ProteinMPNN: Designs amino acid sequences for the generated backbones.
+#   3. AlphaFold: Predicts sequence structures and validates the structures of the designed protein backbones
+
+#-------------------------------SLURM related parameters--------------------------------------------------------------
+task_name: unconditional_example  # Name of your task/job. Change to something descriptive.
+
+# If you are just playing arround, no need to worry about these.
+slurm:
+  exclude: compute-0-10 # Exclude specific nodes (e.g., faulty ones).
+  partition: gpu # Partition to use. Common ones: 'cpu', 'gpu'. Use 'gpu'.
+  gres: gpu:A40:1 # Generic Resource Scheduling: Request specific resurces -> one A40 GPU. (RFdiffusion inference)
+  cpus-per-task: 2 # CPUs per task: 2 is usually fine; increase for faster processing if available (ProteinMPNN).
+  output: slurm-%A_%a_%x.out # Output log file, find it in /out... %A is job ID, %a is array ID, %x is job name.
+  error: slurm-%A_%a_%x.err # Error log file, find it in /out... Similar to output.
+
+num_tasks: 1 # Number of parallel jobs to run. Simple tests: 1. Increase to 5 for real runs.
+
+#--------------------------------Prosculpt related parameters---------------------------------------------------------
+# Define desired protein structure/layout you want via "contig"
+#   1. Unconditional design: generate whatever proteins of specific length 
+#       Syntax: contig: "[min-max]" e.g. "[130-150]" 
+#       -> protein designs of 130 to 150 AA residues
+#   2. Motif Scaffolding: protein of specific length incorporating parts from an existing protein in "pdb_path"
+#       Syntax: contig: "[min-max/ChainResidueStart-ResidueEnd/min-max]" e.g. "[5-15/A10-25/30-40]"
+#       -> Take motif from the existing protein chain A10-25 position, generate between 5 and 15 
+#        residues N-terminal and between 30 and 40 residues C terminal.
+#   3. Binder design: design protein around a target. Specifiy new chain (protein) with "/0"- Provide target via "pdb_path"
+#       Syntax: contig: "[ChainResidueStart-ResidueEnd/0 min-max]" e.g. "[B1-100/0 60-60]".
+#       -> 60 AA binder to chain B 1-100 AA of target protein 
+contig: "[150-150]"  
+
+# Path to your protein template or target e.g. /Examples/insulin_target.pdb ... null when doing unconditional
+pdb_path: null
+
+# Number of unique designs (backbones) to generate with RFdiffusion, 1-2 for testing; 10+ for real runs. 
+num_designs_rfdiff: 2
+
+# Number of sequences to generate with proteinMPNN for each RFdiffusion generated backbone
+num_seq_per_target_mpnn: 2
+
+#Less important parameters, deafults are OK
+chains_to_design: null # Chains to design sequences for. Leave null.
+af2_mpnn_cycles: 1 # Runs a loop of (ProteinMPNN -> AF2 ->). Leave at  1.
+model_order: 1 # Choose specific models to cycle in af2-mpnn. Deafult is ok.
+chain_break_cutoff_A: 2 # Distance to consider a chain break. Default 2 is fine.
+sampling_temp: 0.1 # Sequence diversity in proteinMPNN; 0.1 = low diversity; 1.0 = high diversity. You can play around.
+backbone_noise: 0.0
+use_a3m: False
+#-----------------------------------Aditional useful info--------------------------------------------------------------------
+# About outputs: 
+#     - Find the designed proteins, folded with AF in the "final_pdbs" folder.
+#     - 1-rfdiff, 2_mpnn, 3_af2 each contain outputs of the designated models (coordinates, sequence, fold)
+#     - final_output.csv is a useful file to sorth through all designs and filter according to highest plddt, pae, etc..
+# Metrics in the final_output.csv:
+#     - rg: Radius of Gyration, measure of compactness and size
+#     - charge: overall net charge, sum of charges on ionizable amino acids
+#     - sap: Spatial Aggregation Propensity, likelihood of aggregation due to exposed hydrophobic patches
+#     - link length: how many residues were designed in total ("link" has no meaning)
+#     - plddt: per-residue measure of local confidence, basic AF metric regarding confidence in the fold, higher = better
+#     - plddt sculpted:
+#     - RMSD: structural similarity of whole RFdiffusion .pdb and corresponding AF fold.
+#     - RMSD sculpted: similarity of RFdiffusion generated parts and coresponding ones on AF fold (relevant for motif scaffolding)
+#     - RMSD fixed chains:  
+#     - RMSD motif: structural similarity of original motif (e.g. A25-55) vs AF fold 
+#     - pae: Predicted Aligned Error, expected error (in Ångstroms) between pairs of residues in the fold vs true structure
+
+
+
+# There are many more parameters that can be specified to better guide the models. 
+# Refer to Prosculpt, RFdiffusion and ProteinMPNN githubs for these. Specify them just as you did these basic ones.
+# https://github.com/RosettaCommons/RFdiffusion , 
+# https://github.com/dauparas/ProteinMPNN/tree/main/examples ,
+# https://github.com/ajasja/prosculpt/blob/main/README.md 
+
+#-----------------------------------Configurations. Don't change.-----------------------------------------------------
+defaults:
+  - installation
+  - _self_
+  
+pass_to_rfdiff: # Groups to pass to RfDiff
+- inference
+- potentials
+
+inference:
+  generatedWithProsculpt: true # Leave this dummy here, otherwise it will overwrite default RfDiff base config with null
+potentials:
+  generatedWithProsculpt: true # Leave this dummy here, otherwise it will overwrite default RfDiff base config with null
+
